@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Piranha Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Silkscreen:wght@400;700&display=swap">
+<style>
+/* Layout: full-bleed pixel canvas of the river; HUD pinned to the safe-area corners:
+   swarm meter top-left, river map top-right, scatter button bottom-right, banners centred. */
+:root{
+  --bg:#0b1410; --ink:#0d1714; --ink-2:#17271f; --hi:#6f8f63; --lo:#030605;
+  --bone:#efe6cf; --muted:#a3b59c; --moss:#7fb04a; --blood:#e3392e; --gold:#ffd23a;
+  --lvl:#f4f1ea;
+  --display:'Bungee', Impact, 'Arial Black', sans-serif;
+  --pixel:'Silkscreen', 'Courier New', monospace;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+  color-scheme: dark;
+}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);}
+body{color:var(--bone);font-family:var(--pixel);font-size:13px;-webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none;overscroll-behavior:none;}
+#game{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;image-rendering:pixelated;cursor:crosshair;}
+[hidden]{display:none!important;}
+button{font-family:var(--pixel);color:var(--bone);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+
+/* 90s bevelled panel */
+.panel{background:linear-gradient(180deg,rgba(23,39,31,.92),rgba(13,23,20,.92));
+  box-shadow:inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 0 3px 0 rgba(0,0,0,.45);border-radius:3px;}
+
+#hud{position:fixed;inset:0;pointer-events:none;}
+#hud > *{pointer-events:auto;}
+#meter{position:absolute;top:calc(10px + var(--sat));left:calc(10px + var(--sal));
+  width:min(440px, calc(100vw - 150px - var(--sal) - var(--sar)));display:flex;gap:10px;align-items:center;padding:8px 10px 9px 8px;
+  transform-origin:20% 50%;}
+.lv{flex:none;width:46px;height:46px;display:grid;place-items:center;align-content:center;background:var(--lo);
+  box-shadow:inset 2px 2px 0 rgba(0,0,0,.6), inset -1px -1px 0 var(--hi);border-radius:2px;line-height:1;}
+.lv-k{font-size:9px;letter-spacing:.14em;color:var(--muted);}
+#lvNum{font-family:var(--display);font-size:24px;color:var(--lvl);text-shadow:0 2px 0 #000;display:inline-block;}
+.meter-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;}
+.meter-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+#lvName{font-weight:700;font-size:12px;letter-spacing:.08em;color:var(--lvl);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#massTxt{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;}
+#massTxt b{color:var(--bone);font-weight:700;}
+.bar{position:relative;height:16px;background:#050a08;overflow:hidden;border-radius:1px;
+  box-shadow:inset 2px 2px 0 rgba(0,0,0,.7), inset -1px -1px 0 #2c4234;}
+#barGhost,#barFill{position:absolute;inset:2px;transform-origin:0 50%;transform:scaleX(0);}
+#barGhost{background:var(--bone);opacity:.35;}
+#barGhost.loss{background:var(--blood);opacity:.8;}
+#barFill{background:linear-gradient(180deg, rgba(255,255,255,.55) 0 22%, transparent 22% 70%, rgba(0,0,0,.22) 70%), var(--lvl);}
+.bar-ticks{position:absolute;inset:0;background:repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), rgba(0,0,0,.55) calc(10% - 2px) 10%);}
+.bar-shine{position:absolute;top:0;bottom:0;width:40%;left:-45%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.95),transparent);opacity:0;}
+#meter.max #barFill{animation:redPulse .55s ease-in-out infinite alternate;}
+#meter.max{animation:panelGlow .55s ease-in-out infinite alternate;}
+#meter.max #lvNum,#meter.max #lvName{animation:redText .55s ease-in-out infinite alternate;}
+@keyframes redPulse{from{background-color:#ff2a22;filter:brightness(1.25);}to{background-color:#8c0c08;filter:brightness(.9);}}
+@keyframes redText{from{color:#ff4a3a;}to{color:#b3140e;}}
+@keyframes panelGlow{from{box-shadow:inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 0 0 18px rgba(255,40,30,.75);}
+  to{box-shadow:inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 0 0 4px rgba(255,40,30,.2);}}
+.spark{position:absolute;width:5px;height:5px;background:var(--lvl);pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.5);}
+
+#boss{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--sab));width:min(420px, calc(100vw - 140px));
+  padding:7px 10px 9px;display:flex;flex-direction:column;gap:5px;}
+.boss-name{font-weight:700;font-size:11px;letter-spacing:.18em;color:#d9f07a;text-align:center;}
+#bossFill{position:absolute;inset:2px;transform-origin:0 50%;background:linear-gradient(180deg,rgba(255,255,255,.4) 0 25%,transparent 25%),#7aa832;}
+
+#mapWrap{position:absolute;top:calc(10px + var(--sat));right:calc(10px + var(--sar));display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
+#mini{width:116px;height:116px;display:block;image-rendering:pixelated;padding:4px;cursor:pointer;}
+#mapWrap.big #mini{width:min(78vw,78vh,560px);height:min(78vw,78vh,560px);}
+.btn-row{display:flex;gap:6px;}
+.ibtn{width:38px;height:34px;border:0;padding:0;display:grid;place-items:center;}
+.ibtn svg{width:18px;height:18px;fill:var(--bone);}
+.ibtn.off svg{opacity:.35;}
+
+#btnScatter{position:absolute;right:calc(16px + var(--sar));bottom:calc(18px + var(--sab));width:86px;height:86px;border-radius:50%;border:0;
+  --cd:0;background:radial-gradient(circle at 50% 38%, #3c5a44 0 30%, #1a2b22 70%);
+  box-shadow:inset 3px 3px 0 var(--hi), inset -3px -3px 0 var(--lo), 0 4px 0 rgba(0,0,0,.5);display:grid;place-items:center;overflow:hidden;}
+#btnScatter::before{content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(rgba(0,0,0,.72) calc(var(--cd) * 360deg), transparent 0);}
+#btnScatter span{position:relative;font-weight:700;font-size:10px;letter-spacing:.12em;line-height:1.25;text-align:center;}
+#btnScatter span i{display:block;font-style:normal;font-size:8px;color:var(--muted);letter-spacing:.08em;}
+#btnScatter.ready{animation:readyGlow 1.6s ease-in-out infinite;}
+@keyframes readyGlow{50%{box-shadow:inset 3px 3px 0 var(--hi), inset -3px -3px 0 var(--lo), 0 4px 0 rgba(0,0,0,.5), 0 0 16px rgba(127,176,74,.7);}}
+
+#hint{position:absolute;left:50%;top:calc(84px + var(--sat));transform:translateX(-50%);max-width:min(560px, calc(100vw - 32px));
+  text-align:center;font-size:12px;line-height:1.5;letter-spacing:.04em;padding:7px 12px;pointer-events:none;opacity:0;transition:opacity .4s;
+  background:rgba(5,10,8,.78);box-shadow:inset 1px 1px 0 var(--hi), inset -1px -1px 0 var(--lo);}
+#hint.on{opacity:1;}
+
+#banner{position:fixed;left:0;right:0;top:30%;text-align:center;pointer-events:none;padding-inline:16px;opacity:0;}
+#bannerSub{font-weight:700;font-size:clamp(12px,2.6vw,18px);letter-spacing:.42em;color:var(--bone);text-shadow:0 2px 0 #000;margin-bottom:6px;}
+#bannerMain{font-family:var(--display);font-size:clamp(34px,10.5vw,92px);line-height:.95;color:var(--bc,#fff);text-wrap:balance;
+  text-shadow:0 3px 0 #000, 0 6px 0 rgba(0,0,0,.65), 3px 0 0 #000, -3px 0 0 #000, 0 -3px 0 #000, 0 0 30px rgba(0,0,0,.5);}
+#vignette{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center, transparent 45%, rgba(200,10,10,.55) 100%);}
+
+/* overlay screens */
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow-y:auto;
+  padding:calc(16px + var(--sat)) 16px calc(16px + var(--sab));background:radial-gradient(ellipse at 50% 40%, rgba(8,20,15,.55), rgba(3,8,6,.9));touch-action:pan-y;}
+.card{width:min(560px,100%);display:flex;flex-direction:column;gap:16px;padding:22px 20px 20px;margin:auto;}
+.title{font-family:var(--display);line-height:.9;margin:0;text-align:center;}
+.title .t1{display:block;font-size:clamp(46px,13vw,84px);color:#ff4a32;letter-spacing:.01em;
+  text-shadow:0 3px 0 #5c0b06, 0 6px 0 #2a0503, 0 9px 0 #000, 0 0 40px rgba(255,60,40,.35);}
+.title .t2{display:block;font-size:clamp(20px,6vw,36px);color:var(--bone);letter-spacing:.2em;margin-top:8px;text-shadow:0 3px 0 #000;}
+.lede{margin:0;font-size:13px;line-height:1.6;color:var(--bone);text-align:center;text-wrap:pretty;}
+.rows{display:grid;gap:8px;margin:0;padding:0;list-style:none;}
+.rows li{display:grid;grid-template-columns:118px 1fr;gap:10px;align-items:baseline;font-size:12px;line-height:1.45;}
+.rows b{color:var(--gold);letter-spacing:.06em;font-weight:700;}
+.rows span{color:var(--muted);min-width:0;}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
+.btn{border:0;padding:13px 18px;font-size:14px;font-weight:700;letter-spacing:.12em;
+  background:linear-gradient(180deg,#3d6a3a,#21402a);box-shadow:inset 2px 2px 0 #8fbf74, inset -2px -2px 0 #0a1a0e, 0 4px 0 rgba(0,0,0,.6);}
+.btn.primary{background:linear-gradient(180deg,#d8432f,#7e160c);box-shadow:inset 2px 2px 0 #ff9a7a, inset -2px -2px 0 #3a0703, 0 4px 0 rgba(0,0,0,.6);font-size:16px;padding:15px 24px;}
+.btn:active{transform:translateY(2px);}
+.small{font-size:11px;color:var(--muted);text-align:center;margin:0;line-height:1.5;}
+h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-align:center;color:var(--bone);text-shadow:0 3px 0 #000;line-height:1;}
+.guide{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+.gcard{display:grid;grid-template-columns:58px 1fr;gap:8px;align-items:center;padding:6px;background:rgba(0,0,0,.35);box-shadow:inset 1px 1px 0 rgba(255,255,255,.07);}
+.gcard canvas{width:58px;height:34px;image-rendering:pixelated;background:#245a50;}
+.gcard div{min-width:0;font-size:10px;line-height:1.4;}
+.gcard .n{font-weight:700;font-size:11px;color:var(--bone);}
+.gcard .ok{color:var(--moss);} .gcard .bad{color:var(--blood);}
+.tier-h{grid-column:1/-1;font-size:10px;letter-spacing:.2em;color:var(--muted);margin-top:6px;}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.stat{background:rgba(0,0,0,.35);padding:8px;text-align:center;display:flex;flex-direction:column;gap:4px;}
+.stat b{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;color:var(--gold);}
+.stat span{font-size:9px;letter-spacing:.14em;color:var(--muted);}
+#loading{position:fixed;left:50%;bottom:calc(24px + var(--sab));transform:translateX(-50%);font-size:11px;letter-spacing:.2em;color:var(--muted);}
+@media (max-width:520px){
+  .rows li{grid-template-columns:96px 1fr;}
+  #mini{width:92px;height:92px;}
+  #btnScatter{width:78px;height:78px;}
+  #hint{top:calc(168px + var(--sat));}
+}
+@media (prefers-reduced-motion: reduce){
+  #meter.max #barFill,#meter.max,#btnScatter.ready,#meter.max #lvNum,#meter.max #lvName{animation:none;}
+}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" hidden>
+  <div id="meter" class="panel">
+    <div class="lv"><span class="lv-k">LV</span><span id="lvNum">1</span></div>
+    <div class="meter-main">
+      <div class="meter-top"><span id="lvName">SPECK OF TEETH</span><span id="massTxt"><b>12</b> / 22</span></div>
+      <div class="bar"><div id="barGhost"></div><div id="barFill"></div><div class="bar-ticks"></div><div class="bar-shine"></div></div>
+    </div>
+  </div>
+  <div id="mapWrap">
+    <canvas id="mini" class="panel" width="232" height="232" title="River map (tap to enlarge)"></canvas>
+    <div class="btn-row">
+      <button id="btnSound" class="ibtn panel" aria-label="Toggle sound"><svg viewBox="0 0 16 16"><path d="M2 6h3l4-3v10L5 10H2z"/><path d="M11 5h1v6h-1zM13 3h1v10h-1z"/></svg></button>
+      <button id="btnPause" class="ibtn panel" aria-label="Pause and field guide"><svg viewBox="0 0 16 16"><path d="M3 2h4v12H3zM9 2h4v12H9z"/></svg></button>
+    </div>
+  </div>
+  <div id="boss" class="panel" hidden>
+    <div class="boss-name">GREEN ANACONDA</div>
+    <div class="bar"><div id="bossFill"></div></div>
+  </div>
+  <button id="btnScatter" aria-label="Scatter the swarm"><span>SCATTER<i>2× TAP</i></span></button>
+  <div id="hint"></div>
+</div>
+
+<div id="banner"><div id="bannerSub"></div><div id="bannerMain"></div></div>
+<div id="vignette"></div>
+
+<div id="screenStart" class="screen">
+  <div class="card panel">
+    <h1 class="title"><span class="t1">PIRANHA</span><span class="t2">SIMULATOR</span></h1>
+    <p class="lede">You are a swarm of piranhas loose in the Amazon. Eat smaller fish to grow the swarm. Big fish bite back until you are big enough to take them. A giant anaconda hides in the lagoon at the centre of the map.</p>
+    <ul class="rows">
+      <li><b>HOLD &amp; DRAG</b><span>The swarm swims toward your thumb.</span></li>
+      <li><b>DOUBLE-TAP</b><span>Scatter to dodge a bite, then regroup where your thumb is. Short cooldown.</span></li>
+      <li><b>RED SKULL</b><span>Too big to eat. Bigger tiers bite more times before they swim off.</span></li>
+      <li><b>KEYBOARD</b><span>WASD or arrows to swim, Space to scatter, P to pause.</span></li>
+    </ul>
+    <div class="actions"><button id="btnStart" class="btn primary">START HUNTING</button><button id="btnGuide0" class="btn">FIELD GUIDE</button></div>
+    <p class="small" id="seedTxt">Every game carves a new river.</p>
+  </div>
+</div>
+
+<div id="screenPause" class="screen" hidden>
+  <div class="card panel">
+    <h2 class="h" id="pauseTitle">PAUSED</h2>
+    <div class="guide" id="guide"></div>
+    <div class="actions"><button id="btnResume" class="btn primary">RESUME</button><button id="btnRestart" class="btn">NEW RIVER</button></div>
+  </div>
+</div>
+
+<div id="screenEnd" class="screen" hidden>
+  <div class="card panel">
+    <h2 class="h" id="endTitle">THE SWARM IS GONE</h2>
+    <p class="lede" id="endText"></p>
+    <div class="stats" id="endStats"></div>
+    <div class="actions"><button id="btnAgain" class="btn primary">SWIM AGAIN</button><button id="btnContinue" class="btn" hidden>KEEP SWIMMING</button></div>
+  </div>
+</div>
+<div id="loading">CARVING THE RIVER…</div>
+
+<script>
+'use strict';
+/* ================= utilities ================= */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+function angDiff(a, b) { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hash2(x, y, s) {
+  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul((s | 0) + 1013, 1442695041);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296;
+}
+let SEED = 1;
+function vnoise(x, y, s) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), k = (s | 0) + SEED;
+  const a = hash2(xi, yi, k), b = hash2(xi + 1, yi, k), c = hash2(xi, yi + 1, k), d = hash2(xi + 1, yi + 1, k);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+const bayer = (x, y) => BAYER[((y & 3) << 2) | (x & 3)];
+const hexCache = {};
+function rgb(hex) {
+  if (hexCache[hex]) return hexCache[hex];
+  const n = parseInt(hex.slice(1), 16);
+  return (hexCache[hex] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]);
+}
+
+/* ================= game tables ================= */
+const LEVELS = [
+  { name: 'SPECK OF TEETH', need: 0 },
+  { name: 'NIPPING SHOAL', need: 24 },
+  { name: 'HUNGRY SWARM', need: 46 },
+  { name: 'FRENZY', need: 78 },
+  { name: 'RAZOR CLOUD', need: 120 },
+  { name: 'BLOOD HORDE', need: 175 },
+  { name: 'FLESH TIDE', need: 245 },
+  { name: 'BONE STORM', need: 335 },
+  { name: 'RIVER PLAGUE', need: 445 },
+  { name: 'AMAZON APOCALYPSE', need: 580 },
+];
+const MAX_LEVEL = LEVELS.length, MAX_MASS = 720, START_MASS = 12, DEAD_MASS = 4;
+const LEVEL_COLORS = ['#f4f1ea', '#fff6c4', '#ffee8a', '#ffe04a', '#ffcc22', '#ffb21c', '#ff9618', '#ff7b16', '#ff5c14', '#ff2a22'];
+
+// eat = swarm level needed to eat this tier; bites = attacks before it leaves (= tier)
+const TIERS = [null,
+  { eat: 1, food: [1, 2], hp: 0.6, dmg: 2, weight: 100, cruise: 20, flee: 42, charge: 0, turn: 5.0 },
+  { eat: 2, food: [4, 6], hp: 3, dmg: 4, weight: 46, cruise: 19, flee: 43, charge: 80, turn: 3.8 },
+  { eat: 4, food: [10, 14], hp: 12, dmg: 8, weight: 22, cruise: 18, flee: 44, charge: 86, turn: 3.0 },
+  { eat: 6, food: [24, 30], hp: 38, dmg: 15, weight: 10, cruise: 17, flee: 45, charge: 92, turn: 2.5 },
+  { eat: 8, food: [48, 58], hp: 110, dmg: 27, weight: 4.5, cruise: 16, flee: 46, charge: 98, turn: 2.1 },
+  { eat: 10, food: [90, 110], hp: 260, dmg: 44, weight: 2, cruise: 18, flee: 48, charge: 108, turn: 1.9 },
+];
+
+/* Species are drawn top-down, koi-pond style, pixel by pixel.
+   pat rules are evaluated on t (0 nose → 1 tail base) and s (−1..1 across the back). */
+const SPECIES = [
+  // tier 1
+  { id: 'neon', name: 'Neon Tetra', tier: 1, len: 7, wid: 1.6, back: '#9fb4c4', fin: '#cfe3ea', finA: .5, tail: '#ff3b4a', pec: .5, school: [4, 8],
+    pat: [{ k: 'stripe', c: '#3ce0ff', a: .05, b: .62, w: .7 }, { k: 'rear', c: '#ff3048', a: .55 }], blurb: 'Glowing blue, always in a crowd.' },
+  { id: 'guppy', name: 'Guppy', tier: 1, len: 7, wid: 1.6, back: '#8e9c80', fin: '#ffb04a', finA: .7, tail: '#ff8a1e', tail2: '#3b7dff', tailW: 2.2, tailLen: .34, pec: .4, school: [3, 6],
+    pat: [], blurb: 'Tiny, with a tail bigger than its body.' },
+  { id: 'hatchet', name: 'Hatchetfish', tier: 1, len: 6, wid: 2.1, back: '#d9e2e2', fin: '#f0fbfb', finA: .75, tail: '#c7d3d3', pec: 1.5, school: [3, 7],
+    pat: [{ k: 'stripe', c: '#6f8a8c', a: .2, b: .8, w: .25 }], blurb: 'A silver chip with wing-like fins.' },
+  // tier 2
+  { id: 'angel', name: 'Angelfish', tier: 2, len: 11, wid: 2.6, back: '#ddd8c4', fin: '#e8e1c8', finA: .6, tail: '#cfc8ae', tailW: 1.6, tailLen: .32, pec: 1.3,
+    pat: [{ k: 'bars', c: '#1c1c1c', at: [.22, .47, .72], w: .06 }], blurb: 'Silver with black bars and long trailing fins.' },
+  { id: 'discus', name: 'Discus', tier: 2, len: 12, wid: 4.8, shape: 'disc', bodyEnd: .84, back: '#e06c26', fin: '#ff9b4a', finA: .6, tail: '#e8823a', tailW: 0.55, pec: .35,
+    pat: [{ k: 'waves', c: '#2fb7ae', f: 26 }], blurb: 'Round as a plate, painted orange and teal.' },
+  { id: 'cory', name: 'Corydoras', tier: 2, len: 9, wid: 2.5, shape: 'cat', back: '#b58c56', fin: '#d8c09a', finA: .6, tail: '#a98252', pec: .8, whisk: '#e2cfa6', whiskLen: 2.5,
+    pat: [{ k: 'spots', c: '#3a2c1c', d: .3, a: .12, b: 1 }], blurb: 'Armoured bottom-sifter with whiskers.' },
+  // tier 3
+  { id: 'oscar', name: 'Oscar', tier: 3, len: 17, wid: 5, back: '#3d4a2c', fin: '#2e3a22', finA: .8, tail: '#33402a', tailW: 1.3, pec: .8, round: true,
+    pat: [{ k: 'spots', c: '#ff8a2a', d: .2, a: .25, b: .9 }, { k: 'ring', c: '#ff7a1a', t0: .93, s0: 0, r: .1 }], blurb: 'Olive brute with orange tiger spots.' },
+  { id: 'pacu', name: 'Red-bellied Pacu', tier: 3, len: 18, wid: 5.6, back: '#6f7b7c', flank: '#cf4a3a', flankW: .7, fin: '#d65a3a', finA: .85, tail: '#5c6566', tailW: 1.2, pec: .8,
+    pat: [{ k: 'spots', c: '#869394', d: .25, a: .2, b: .9 }], blurb: 'The piranha’s big vegetarian cousin. Has human-like teeth.' },
+  { id: 'wolf', name: 'Wolf Fish', tier: 3, len: 17, wid: 3.6, shape: 'long', back: '#5b4a33', fin: '#4a3c28', finA: .8, tail: '#4a3c28', pec: .7, round: true,
+    pat: [{ k: 'spots', c: '#2b2216', d: .35, a: .1, b: 1 }, { k: 'spots', c: '#7d6747', d: .18, a: .1, b: 1, sd: 9 }], blurb: 'Ambush hunter in brown camouflage.' },
+  // tier 4
+  { id: 'peacock', name: 'Peacock Bass', tier: 4, len: 28, wid: 6.4, back: '#93b33a', flank: '#e8c63a', flankW: .66, fin: '#e0503a', finA: .85, tail: '#a8b84a', tailW: 1.2, pec: .9,
+    pat: [{ k: 'bars', c: '#16200f', at: [.32, .52, .7], w: .045 }, { k: 'ring', c: '#16200f', t0: .92, s0: 0, r: .12, rim: '#ffcf3a' }], blurb: 'Tucunaré. Fast, gold, and furious.' },
+  { id: 'arowana', name: 'Silver Arowana', tier: 4, len: 32, wid: 3.6, shape: 'long', back: '#c9d3cf', fin: '#e6eeea', finA: .7, tail: '#b9c6c2', tailW: 1.2, pec: .7, round: true, whisk: '#eef5f2', whiskLen: 4,
+    pat: [{ k: 'scales', c: '#98aaa4' }, { k: 'stripe', c: '#7d8f8a', a: .05, b: .95, w: .16 }], blurb: 'The water monkey. Leaps for prey.' },
+  { id: 'ray', name: 'Motoro Stingray', tier: 4, len: 30, wid: 10.5, shape: 'ray', bodyEnd: .56, back: '#5a4a2e', fin: '#5a4a2e', finA: 1, tail: '#3a2e1c', pec: 0,
+    pat: [{ k: 'ocelli', c: '#ff8a2a', rim: '#14100a', d: .5 }], blurb: 'Flat disc with orange eyespots and a venom barb.' },
+  { id: 'redtail', name: 'Redtail Catfish', tier: 4, len: 30, wid: 6.6, shape: 'cat', back: '#2f3436', flank: '#ebe6d8', flankW: .72, fin: '#3a3f40', finA: .9, tail: '#e3412a', tailW: 1.1, pec: 1, whisk: '#d8d4c8', whiskLen: 9,
+    pat: [{ k: 'spots', c: '#1d2122', d: .2, a: .15, b: .9 }], blurb: 'Bulky, white-sided, with a fire-red tail.' },
+  // tier 5
+  { id: 'arapaima', name: 'Arapaima', tier: 5, len: 48, wid: 7, shape: 'long', back: '#3c4a3e', fin: '#3a2a26', finA: .9, tail: '#a8302a', tailW: 1.0, pec: .8, round: true,
+    pat: [{ k: 'scales', c: '#2f3b31' }, { k: 'rear', c: '#9a2e28', a: .6 }, { k: 'scalesRear', c: '#c2453a', a: .6 }], blurb: 'Pirarucu. Armoured giant that gulps air.' },
+  { id: 'piraiba', name: 'Piraíba', tier: 5, len: 52, wid: 9, shape: 'cat', back: '#6a7174', flank: '#aab0b0', flankW: .74, fin: '#5c6366', finA: .9, tail: '#5c6366', tailW: 1.1, pec: 1, whisk: '#c9c6b8', whiskLen: 16,
+    pat: [{ k: 'spots', c: '#3e4446', d: .12, a: .2, b: .9 }], blurb: 'Goliath catfish. Swallows monkeys, they say.' },
+  // tier 6
+  { id: 'shark', name: 'Bull Shark', tier: 6, len: 70, wid: 8.5, shape: 'shark', back: '#68717a', flank: '#9aa3a8', flankW: .78, fin: '#59626a', finA: 1, tail: '#59626a', tailW: 1.7, pec: 2.3, fork: true,
+    pat: [{ k: 'stripe', c: '#4d555c', a: .28, b: .5, w: .22 }], blurb: 'Swims up from the sea. Nothing here scares it.' },
+  { id: 'eel', name: 'Electric Eel', tier: 6, len: 74, wid: 4.3, shape: 'eel', bodyEnd: 1, back: '#2c2a24', flank: '#e09a38', flankW: .78, fin: '#6a5a40', finA: .55, tail: '#2c2a24', pec: .5,
+    pat: [{ k: 'spots', c: '#3b382f', d: .15, a: .1, b: 1 }], blurb: '600 volts. Every bite comes with a jolt.' },
+];
+const SPECIES_BY_TIER = [[], [], [], [], [], [], []];
+SPECIES.forEach(sp => SPECIES_BY_TIER[sp.tier].push(sp));
+
+/* ================= world generation ================= */
+const WORLD = 3600, CELL = 4, GN = WORLD / CELL, CH = 128, NCH = Math.ceil(WORLD / CH);
+const CENTER = { x: WORLD / 2, y: WORLD / 2 };
+const LAGOON_R = 230, MARGIN = 44;
+let grid = null;            // signed distance-ish to shore in px (positive = water)
+let rivers = [], guardSpots = [], startPos = null;
+
+function depthAt(x, y) {
+  let gx = x / CELL - 0.5, gy = y / CELL - 0.5;
+  if (gx < 0) gx = 0; else if (gx > GN - 1.001) gx = GN - 1.001;
+  if (gy < 0) gy = 0; else if (gy > GN - 1.001) gy = GN - 1.001;
+  const ix = gx | 0, iy = gy | 0, fx = gx - ix, fy = gy - iy, i = iy * GN + ix;
+  const a = grid[i], b = grid[i + 1], c = grid[i + GN], d = grid[i + GN + 1];
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+function gradAt(x, y) {
+  const gx = depthAt(x + 5, y) - depthAt(x - 5, y), gy = depthAt(x, y + 5) - depthAt(x, y - 5);
+  const l = Math.hypot(gx, gy) || 1; return { x: gx / l, y: gy / l };
+}
+function stampWater(x, y, r) {
+  const ext = r + MARGIN;
+  const gx0 = Math.max(0, Math.floor((x - ext) / CELL)), gx1 = Math.min(GN - 1, Math.ceil((x + ext) / CELL));
+  const gy0 = Math.max(0, Math.floor((y - ext) / CELL)), gy1 = Math.min(GN - 1, Math.ceil((y + ext) / CELL));
+  for (let gy = gy0; gy <= gy1; gy++) {
+    const cy = gy * CELL + CELL / 2 - y, row = gy * GN;
+    for (let gx = gx0; gx <= gx1; gx++) {
+      const cx = gx * CELL + CELL / 2 - x, v = r - Math.sqrt(cx * cx + cy * cy);
+      if (v > grid[row + gx]) grid[row + gx] = v;
+    }
+  }
+}
+function stampLand(x, y, r, R, wob) {
+  const ext = r * (1 + wob) + MARGIN, p1 = R() * TAU, p2 = R() * TAU;
+  const gx0 = Math.max(0, Math.floor((x - ext) / CELL)), gx1 = Math.min(GN - 1, Math.ceil((x + ext) / CELL));
+  const gy0 = Math.max(0, Math.floor((y - ext) / CELL)), gy1 = Math.min(GN - 1, Math.ceil((y + ext) / CELL));
+  for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+    const cx = gx * CELL + CELL / 2 - x, cy = gy * CELL + CELL / 2 - y, a = Math.atan2(cy, cx);
+    const rr = r * (1 + wob * Math.sin(3 * a + p1) + wob * .6 * Math.sin(5 * a + p2));
+    const v = Math.sqrt(cx * cx + cy * cy) - rr, i = gy * GN + gx;
+    if (v < grid[i]) grid[i] = v;
+  }
+}
+function stampBlob(x, y, r, R, wob) {
+  const ext = r * (1 + wob * 1.6) + MARGIN, p1 = R() * TAU, p2 = R() * TAU;
+  const gx0 = Math.max(0, Math.floor((x - ext) / CELL)), gx1 = Math.min(GN - 1, Math.ceil((x + ext) / CELL));
+  const gy0 = Math.max(0, Math.floor((y - ext) / CELL)), gy1 = Math.min(GN - 1, Math.ceil((y + ext) / CELL));
+  for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+    const cx = gx * CELL + CELL / 2 - x, cy = gy * CELL + CELL / 2 - y, a = Math.atan2(cy, cx);
+    const rr = r * (1 + wob * Math.sin(3 * a + p1) + wob * .6 * Math.sin(5 * a + p2));
+    const v = rr - Math.sqrt(cx * cx + cy * cy), i = gy * GN + gx;
+    if (v > grid[i]) grid[i] = v;
+  }
+}
+function stampPath(pts) {
+  let acc = 1e9;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (i > 0) acc += Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y);
+    if (acc >= Math.max(3, p.r * 0.3) || i === pts.length - 1) { stampWater(p.x, p.y, p.r); acc = 0; }
+  }
+}
+function meander(R, sx, sy, o) {
+  // o: {target?, heading?, length?, amp, wav, r0, rVar, stop}
+  const pts = []; let x = sx, y = sy, s = 0, wander = 0, h = o.heading || 0;
+  const ph = R() * TAU, ph2 = R() * TAU, ph3 = R() * TAU, step = 5;
+  for (let n = 0; n < 1200; n++) {
+    let base;
+    if (o.target) {
+      const dx = o.target.x - x, dy = o.target.y - y;
+      if (Math.hypot(dx, dy) < o.stop) break;
+      base = Math.atan2(dy, dx);
+    } else {
+      if (s > o.length) break;
+      base = o.heading;
+      const bd = Math.min(x, y, WORLD - x, WORLD - y);
+      if (bd < 260) base = Math.atan2(CENTER.y - y, CENTER.x - x);
+    }
+    wander = wander * 0.985 + (R() - 0.5) * 0.11;
+    h = base + Math.sin(s / o.wav * TAU + ph) * o.amp + Math.sin(s / (o.wav * 0.43) * TAU + ph3) * o.amp * 0.3 + wander;
+    x += Math.cos(h) * step; y += Math.sin(h) * step; s += step;
+    const r = Math.max(9, o.r0 + Math.sin(s / 230 + ph2) * o.rVar + Math.sin(s / 71 + ph) * o.rVar * 0.35);
+    pts.push({ x, y, r, h });
+  }
+  return pts;
+}
+
+function genWorld(seed) {
+  SEED = seed;
+  const R = mulberry32(seed);
+  grid = new Float32Array(GN * GN).fill(-MARGIN);
+  rivers = []; guardSpots = [];
+  // central lagoon: the anaconda's lair
+  stampBlob(CENTER.x, CENTER.y, LAGOON_R, R, 0.1);
+  // main rivers, from the far jungle into the lagoon
+  const nMain = 6, a0 = R() * TAU, mains = [];
+  for (let i = 0; i < nMain; i++) {
+    const ang = a0 + i * TAU / nMain + (R() - 0.5) * 0.5, dist = 1480 + R() * 170;
+    const pts = meander(R, CENTER.x + Math.cos(ang) * dist, CENTER.y + Math.sin(ang) * dist,
+      { target: CENTER, stop: LAGOON_R - 50, amp: 0.75 + R() * 0.3, wav: 240 + R() * 160, r0: 36 + R() * 12, rVar: 11 });
+    mains.push(pts); rivers.push(pts); stampPath(pts);
+  }
+  // a wandering ring river linking the mains
+  const ring = [], p1 = R() * TAU, p2 = R() * TAU, p3 = R() * TAU;
+  for (let i = 0; i <= 900; i++) {
+    const th = i / 900 * TAU;
+    const rr = 960 + 120 * Math.sin(3 * th + p1) + 70 * Math.sin(7 * th + p2);
+    ring.push({ x: CENTER.x + Math.cos(th) * rr, y: CENTER.y + Math.sin(th) * rr, r: 24 + 9 * Math.sin(5 * th + p3) });
+  }
+  rivers.push(ring); stampPath(ring);
+  // outer oxbow arcs between neighbouring river mouths
+  for (let i = 0; i < nMain; i++) {
+    if (R() < 0.45) continue;
+    const a = mains[i][Math.floor(mains[i].length * 0.12)], b = mains[(i + 1) % nMain][Math.floor(mains[(i + 1) % nMain].length * 0.12)];
+    const pts = meander(R, a.x, a.y, { target: b, stop: 30, amp: 0.6, wav: 300, r0: 20 + R() * 6, rVar: 6 });
+    rivers.push(pts); stampPath(pts);
+  }
+  // tributaries with lakes at their heads
+  const trunks = rivers.slice();
+  for (let k = 0; k < 16; k++) {
+    const tr = trunks[Math.floor(R() * trunks.length)];
+    const p = tr[Math.floor(tr.length * (0.15 + R() * 0.6))];
+    if (Math.hypot(p.x - CENTER.x, p.y - CENTER.y) < LAGOON_R + 300) continue;
+    const dir = (p.h !== undefined ? p.h : Math.atan2(p.y - CENTER.y, p.x - CENTER.x)) + (R() < 0.5 ? 1 : -1) * (1.2 + R() * 0.7);
+    const pts = meander(R, p.x, p.y, { heading: dir, length: 320 + R() * 560, amp: 0.9, wav: 160 + R() * 120, r0: 14 + R() * 9, rVar: 5 });
+    rivers.push(pts); stampPath(pts);
+    if (pts.length && R() < 0.6) { const e = pts[pts.length - 1]; stampBlob(e.x, e.y, 50 + R() * 60, R, 0.18); }
+  }
+  // lakes swelling out of river bends
+  for (let k = 0; k < 9; k++) {
+    const tr = trunks[Math.floor(R() * trunks.length)], p = tr[Math.floor(tr.length * (0.1 + R() * 0.75))];
+    if (Math.hypot(p.x - CENTER.x, p.y - CENTER.y) < LAGOON_R + 260) continue;
+    stampBlob(p.x + (R() - 0.5) * 60, p.y + (R() - 0.5) * 60, 70 + R() * 70, R, 0.2);
+  }
+  // ragged shorelines
+  for (let gy = 0; gy < GN; gy++) for (let gx = 0; gx < GN; gx++) {
+    const x = gx * CELL, y = gy * CELL, i = gy * GN + gx;
+    grid[i] += (vnoise(x / 70, y / 70, 1) - 0.5) * 12 + (vnoise(x / 26, y / 26, 2) - 0.5) * 5;
+  }
+  // islands in wide water
+  for (let k = 0; k < 900; k++) {
+    const x = 200 + R() * (WORLD - 400), y = 200 + R() * (WORLD - 400), d = depthAt(x, y);
+    const dc = Math.hypot(x - CENTER.x, y - CENTER.y);
+    if (d < 40 || dc < LAGOON_R + 40) continue;
+    const r = Math.min((d - 18) / 1.25, 8 + R() * 30);
+    if (r > 5) stampLand(x, y, r, R, 0.15);
+  }
+  // rocky islets inside the lagoon
+  for (let k = 0; k < 4; k++) {
+    const a = R() * TAU, d = 70 + R() * 90;
+    stampLand(CENTER.x + Math.cos(a) * d, CENTER.y + Math.sin(a) * d, 9 + R() * 12, R, 0.2);
+  }
+  // keep the map edge as jungle
+  for (let gy = 0; gy < GN; gy++) for (let gx = 0; gx < GN; gx++) {
+    const x = gx * CELL, y = gy * CELL, b = Math.min(x, y, WORLD - x, WORLD - y) - 90, i = gy * GN + gx;
+    if (b < grid[i]) grid[i] = b;
+  }
+  // guards on the final stretch of every main river
+  for (const pts of mains) {
+    const want = [[LAGOON_R + 70, 6], [LAGOON_R + 190, 5], [LAGOON_R + 320, R() < 0.5 ? 5 : 4], [LAGOON_R + 470, 4]];
+    for (const [dist, tier] of want) {
+      let best = null, bd = 1e9;
+      for (const p of pts) { const e = Math.abs(Math.hypot(p.x - CENTER.x, p.y - CENTER.y) - dist); if (e < bd) { bd = e; best = p; } }
+      if (best) guardSpots.push({ x: best.x, y: best.y, tier });
+    }
+  }
+  // start at the mouth of the first main river
+  const sp = mains[0][Math.min(10, mains[0].length - 1)];
+  startPos = { x: sp.x, y: sp.y };
+  buildMinimap();
+}
+
+/* minimap image */
+const miniBase = document.createElement('canvas');
+function buildMinimap() {
+  const N = 232; miniBase.width = N; miniBase.height = N;
+  const c = miniBase.getContext('2d'), img = c.createImageData(N, N), d = img.data;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const wx = (x + 0.5) * WORLD / N, wy = (y + 0.5) * WORLD / N, dep = depthAt(wx, wy), i = (y * N + x) * 4;
+    const lair = Math.hypot(wx - CENTER.x, wy - CENTER.y) < LAGOON_R + 20;
+    let col;
+    if (dep > 0) col = lair ? (dep > 30 ? '#5a2620' : '#7a3a2c') : dep > 22 ? '#2c7466' : dep > 8 ? '#3f8d76' : '#62a884';
+    else col = dep > -8 ? '#3a4a26' : (bayer(x, y) < 0.5 ? '#16261a' : '#1b2d1c');
+    const [r, g, b] = rgb(col); d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
+  }
+  c.putImageData(img, 0, 0);
+}
+/* ================= terrain chunks (pixel-art, dithered) ================= */
+const P = s => s.map(rgb);
+const PAL = {
+  water: P(['#5a9874', '#468668', '#35735d', '#296352', '#1f5248']),
+  lagoon: P(['#56664a', '#46563f', '#384736', '#2c3a2d', '#223024']),
+  shore: rgb('#93b98c'),
+  mud: P(['#7d6c47', '#6a5a3b', '#57482f']),
+  floor: P(['#2f4a24', '#283f1f', '#22361a', '#3a5a2a']),
+  rock: P(['#4b4c45', '#6b6b62', '#8f8f82']),
+  pad: P(['#28561f', '#3e7a2e', '#5c9a3a', '#a4542f', '#c96c3c']),
+  petal: { pink: rgb('#f19ac2'), white: rgb('#f4f1e6'), core: rgb('#f3cf3a') },
+  reed: P(['#4e7a2c', '#6f9a3c', '#a2c058']),
+  log: P(['#33231a', '#553b24', '#7a5a38', '#b39468']),
+};
+const CANOPY = [
+  ['#142a16', '#1f3d1c', '#2d5524', '#40702e', '#5e8f3a', '#5e8f3a', '#5e8f3a'],
+  ['#10231a', '#183424', '#22462e', '#2f5c38', '#467a46', '#467a46', '#467a46'],
+  ['#142a16', '#1f3d1c', '#2d5524', '#40702e', '#5e8f3a', '#ec8fbb', '#f2d24a'],
+  ['#1d3314', '#2f4d1c', '#466b26', '#62882f', '#86a83e', '#86a83e', '#86a83e'],
+].map(P);
+const CANOPY_FLAT = []; CANOPY.forEach(t => { for (let i = 0; i < 8; i++) CANOPY_FLAT.push(t[Math.min(i, 6)]); });
+
+const chunks = new Map(); let chunkTick = 0, chunkGen = 0;
+function getChunk(cx, cy, gen) {
+  const k = cy * NCH + cx; let c = chunks.get(k);
+  if (c) { c.used = chunkTick; return c; }
+  if (!gen) return null;
+  c = renderChunk(cx, cy); c.used = chunkTick; chunks.set(k, c); chunkGen++;
+  if (chunks.size > 200) {
+    let ok = -1, ou = 1e18;
+    for (const [kk, cc] of chunks) if (cc.used < ou) { ou = cc.used; ok = kk; }
+    chunks.delete(ok);
+  }
+  return c;
+}
+function putPx(d, o, c, a) { d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = a === undefined ? 255 : a; }
+
+function renderChunk(cx, cy) {
+  const x0 = cx * CH, y0 = cy * CH, S = SEED;
+  const base = document.createElement('canvas'); base.width = base.height = CH;
+  const bctx = base.getContext('2d'), img = bctx.createImageData(CH, CH), d = img.data;
+  let anyWater = false;
+  for (let py = 0; py < CH; py++) {
+    const wy = y0 + py;
+    for (let px = 0; px < CH; px++) {
+      const wx = x0 + px, o = (py * CH + px) * 4, b = bayer(wx, wy);
+      const v = depthAt(wx + 0.5, wy + 0.5) + (vnoise(wx / 7, wy / 7, 5) - 0.5) * 2.2;
+      let col;
+      if (v > 0) {
+        anyWater = true;
+        const ex = wx - CENTER.x, ey = wy - CENTER.y, dc = Math.sqrt(ex * ex + ey * ey);
+        const pal = clamp((LAGOON_R + 70 - dc) / 90, 0, 1) > b ? PAL.lagoon : PAL.water;
+        if (v < 1.3) col = b < 0.7 ? PAL.shore : pal[0];
+        else {
+          const tex = vnoise(wx / 38, wy / 38, 3);
+          const f = clamp(v / 32, 0, 1) * 0.85 + (tex - 0.5) * 0.35 + 0.08;
+          col = pal[clamp(Math.floor(f * 4 + b), 0, 4)];
+        }
+      } else {
+        const n = vnoise(wx / 11, wy / 11, 4);
+        if (v > -4.5 + n * 2) col = PAL.mud[clamp(Math.floor(n * 2.2 + b), 0, 2)];
+        else if (v > -8) col = b < 0.5 ? PAL.mud[2] : PAL.floor[1];
+        else col = PAL.floor[clamp(Math.floor(vnoise(wx / 5, wy / 5, 6) * 3.2 + b - 0.3), 0, 3)];
+      }
+      putPx(d, o, col);
+    }
+  }
+  // stones in the shallows
+  const RC = 22;
+  if (anyWater) for (let gy = Math.floor((y0 - 6) / RC); gy <= Math.floor((y0 + CH + 6) / RC); gy++)
+    for (let gx = Math.floor((x0 - 6) / RC); gx <= Math.floor((x0 + CH + 6) / RC); gx++) {
+      const h = hash2(gx, gy, S + 31); if (h > 0.3) continue;
+      const rx = (gx + hash2(gx, gy, S + 32)) * RC, ry = (gy + hash2(gx, gy, S + 33)) * RC, dv = depthAt(rx, ry);
+      if (dv < 0.3 || dv > 6) continue;
+      const rr = 1.4 + hash2(gx, gy, S + 34) * 2.4;
+      for (let y = Math.floor(ry - rr - 1); y <= ry + rr + 1; y++) for (let x = Math.floor(rx - rr - 1); x <= rx + rr + 1; x++) {
+        const lx = x - x0, ly = y - y0; if (lx < 0 || ly < 0 || lx >= CH || ly >= CH) continue;
+        const dx = x + 0.5 - rx, dy = y + 0.5 - ry, a = Math.atan2(dy, dx);
+        if (Math.hypot(dx, dy) > rr * (1 + 0.2 * Math.sin(3 * a + h * 20))) continue;
+        const l = 0.5 - (dx + dy) / rr * 0.35;
+        putPx(d, (ly * CH + lx) * 4, PAL.rock[clamp(Math.floor(l * 2.6 + bayer(x, y) - 0.3), 0, 2)]);
+      }
+    }
+  bctx.putImageData(img, 0, 0);
+
+  /* ---- surface overlay: lily pads, logs, reeds, tree canopy + shadows ---- */
+  const over = document.createElement('canvas'); over.width = over.height = CH;
+  const octx = over.getContext('2d'), oimg = octx.createImageData(CH, CH), od = oimg.data;
+  const drawPad = (pcx, pcy, r, notch, giant, flower) => {
+    for (let y = Math.floor(pcy - r - 1); y <= pcy + r + 1; y++) for (let x = Math.floor(pcx - r - 1); x <= pcx + r + 1; x++) {
+      const lx = x - x0, ly = y - y0; if (lx < 0 || ly < 0 || lx >= CH || ly >= CH) continue;
+      const dx = x + 0.5 - pcx, dy = y + 0.5 - pcy, dist = Math.hypot(dx, dy); if (dist > r) continue;
+      const a = Math.atan2(dy, dx);
+      if (!giant && Math.abs(angDiff(a, notch)) < 0.38 && dist > r * 0.12) continue;
+      let c;
+      if (giant) c = dist > r - 1.2 ? PAL.pad[bayer(x, y) < 0.5 ? 3 : 4] : Math.abs(Math.sin(a * 6)) < 0.13 && dist > 2 ? PAL.pad[0] : PAL.pad[(0.5 + (-dx - dy) / r * 0.4) > bayer(x, y) ? 2 : 1];
+      else c = dist > r - 0.9 ? PAL.pad[0] : PAL.pad[(0.45 + (-dx - dy) / r * 0.5) > bayer(x, y) ? 2 : 1];
+      putPx(od, (ly * CH + lx) * 4, c);
+    }
+    if (flower) {
+      const fx = Math.floor(pcx + Math.cos(notch + Math.PI) * r * 0.35), fy = Math.floor(pcy + Math.sin(notch + Math.PI) * r * 0.35);
+      for (const [ox, oy, cc] of [[0, 0, PAL.petal[flower]], [1, 0, PAL.petal[flower]], [0, 1, PAL.petal[flower]], [1, 1, PAL.petal.core], [-1, 1, PAL.petal[flower]], [1, 2, PAL.petal[flower]]]) {
+        const lx = fx + ox - x0, ly = fy + oy - y0; if (lx < 0 || ly < 0 || lx >= CH || ly >= CH) continue;
+        putPx(od, (ly * CH + lx) * 4, cc);
+      }
+    }
+  };
+  if (anyWater) {
+    const LP = 8;
+    for (let gy = Math.floor((y0 - 6) / LP); gy <= Math.floor((y0 + CH + 6) / LP); gy++)
+      for (let gx = Math.floor((x0 - 6) / LP); gx <= Math.floor((x0 + CH + 6) / LP); gx++) {
+        if (vnoise(gx / 5, gy / 5, 42) < 0.57 || hash2(gx, gy, S + 41) > 0.75) continue;
+        const px = (gx + 0.15 + 0.7 * hash2(gx, gy, S + 43)) * LP, py = (gy + 0.15 + 0.7 * hash2(gx, gy, S + 44)) * LP, dv = depthAt(px, py);
+        if (dv < 1.5 || dv > 18) continue;
+        const fl = hash2(gx, gy, S + 46) < 0.12 ? (hash2(gx, gy, S + 47) < 0.5 ? 'pink' : 'white') : null;
+        drawPad(px, py, 1.8 + hash2(gx, gy, S + 45) * 2.6, hash2(gx, gy, S + 48) * TAU, false, fl);
+      }
+    const GP = 46;
+    for (let gy = Math.floor((y0 - 16) / GP); gy <= Math.floor((y0 + CH + 16) / GP); gy++)
+      for (let gx = Math.floor((x0 - 16) / GP); gx <= Math.floor((x0 + CH + 16) / GP); gx++) {
+        if (hash2(gx, gy, S + 51) > 0.13) continue;
+        const px = (gx + 0.5) * GP + (hash2(gx, gy, S + 52) - 0.5) * 20, py = (gy + 0.5) * GP + (hash2(gx, gy, S + 53) - 0.5) * 20, dv = depthAt(px, py);
+        if (dv < 14 || dv > 70 || Math.hypot(px - CENTER.x, py - CENTER.y) < LAGOON_R + 80) continue;
+        drawPad(px, py, 7 + hash2(gx, gy, S + 54) * 6, 0, true, hash2(gx, gy, S + 55) < 0.3 ? 'white' : null);
+      }
+  }
+  // fallen trees reaching into the water
+  const TC = 16;
+  for (let gy = Math.floor((y0 - 44) / TC); gy <= Math.floor((y0 + CH + 44) / TC); gy++)
+    for (let gx = Math.floor((x0 - 44) / TC); gx <= Math.floor((x0 + CH + 44) / TC); gx++) {
+      if (hash2(gx, gy, S + 61) > 0.04) continue;
+      const ax = (gx + 0.5) * TC, ay = (gy + 0.5) * TC, dv = depthAt(ax, ay);
+      if (dv < -9 || dv > -1.5) continue;
+      const g = gradAt(ax, ay), len = 18 + hash2(gx, gy, S + 62) * 22, th = 1.5 + hash2(gx, gy, S + 63) * 1.2;
+      const bx = ax + g.x * len + g.y * len * 0.25, by = ay + g.y * len - g.x * len * 0.25, sx = ax - g.x * 4, sy = ay - g.y * 4;
+      const vx = bx - sx, vy = by - sy, vl2 = vx * vx + vy * vy, vl = Math.sqrt(vl2);
+      for (let y = Math.floor(Math.min(sy, by) - th - 1); y <= Math.max(sy, by) + th + 1; y++)
+        for (let x = Math.floor(Math.min(sx, bx) - th - 1); x <= Math.max(sx, bx) + th + 1; x++) {
+          const lx = x - x0, ly = y - y0; if (lx < 0 || ly < 0 || lx >= CH || ly >= CH) continue;
+          const qx = x + 0.5 - sx, qy = y + 0.5 - sy, t = clamp((qx * vx + qy * vy) / vl2, 0, 1);
+          const ex = qx - vx * t, ey = qy - vy * t, dist = Math.hypot(ex, ey); if (dist > th) continue;
+          const side = (ex * -vy + ey * vx) / vl;
+          let c = t * vl > vl - 1.3 ? PAL.log[3] : side < -th * 0.3 ? PAL.log[2] : side > th * 0.45 ? PAL.log[0] : PAL.log[1];
+          if (hash2(x, y, S + 64) < 0.12) c = PAL.log[0];
+          putPx(od, (ly * CH + lx) * 4, c);
+        }
+    }
+  // canopy into an index buffer that also covers the shadow offset
+  const M = 8, CW = CH + M, can = new Uint8Array(CW * CW), trees = [];
+  for (let gy = Math.floor((y0 - M - 22) / TC); gy <= Math.floor((y0 + CH + 22) / TC); gy++)
+    for (let gx = Math.floor((x0 - M - 22) / TC); gx <= Math.floor((x0 + CH + 22) / TC); gx++) {
+      const tx = (gx + 0.1 + 0.8 * hash2(gx, gy, S + 72)) * TC, ty = (gy + 0.1 + 0.8 * hash2(gx, gy, S + 73)) * TC, dv = depthAt(tx, ty);
+      if (dv > -1.5) continue;
+      const h = hash2(gx, gy, S + 71);
+      if (h > (dv < -7 ? 0.95 : 0.55)) continue;
+      const r = dv < -7 ? 8 + hash2(gx, gy, S + 74) * 10 : 5 + hash2(gx, gy, S + 74) * 6, tt = hash2(gx, gy, S + 75);
+      trees.push({ x: tx, y: ty, r, type: tt < 0.06 ? 2 : tt < 0.3 ? 1 : tt < 0.5 ? 3 : 0, sd: h });
+    }
+  trees.sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const t of trees) {
+    const ext = t.r * 1.2 + 1;
+    for (let y = Math.floor(t.y - ext); y <= t.y + ext; y++) {
+      const ly = y - (y0 - M); if (ly < 0 || ly >= CW) continue;
+      for (let x = Math.floor(t.x - ext); x <= t.x + ext; x++) {
+        const lx = x - (x0 - M); if (lx < 0 || lx >= CW) continue;
+        const dx = x + 0.5 - t.x, dy = y + 0.5 - t.y, dist = Math.sqrt(dx * dx + dy * dy); if (dist > ext) continue;
+        const a = Math.atan2(dy, dx);
+        const rr = t.r * (1 + 0.12 * Math.sin(5 * a + t.sd * 40) + 0.06 * Math.sin(11 * a + t.sd * 13));
+        if (dist > rr) continue;
+        const l = 0.62 - (dx * 0.55 + dy * 0.8) / rr * 0.42 - (dist / rr) ** 2 * 0.3 + (vnoise(x / 3.2, y / 3.2, 76 + t.type) - 0.5) * 0.55;
+        let idx = clamp(Math.floor(l * 4 + bayer(x, y) - 0.5), 0, 4);
+        if (t.type === 2 && idx >= 3 && hash2(x, y, S + 77) < 0.2) idx = hash2(x, y, S + 78) < 0.6 ? 5 : 6;
+        can[ly * CW + lx] = t.type * 8 + idx + 1;
+      }
+    }
+  }
+  for (let py = 0; py < CH; py++) {
+    const wy = y0 + py;
+    for (let px = 0; px < CH; px++) {
+      const wx = x0 + px, o = (py * CH + px) * 4, ci = can[(py + M) * CW + px + M];
+      if (ci) { putPx(od, o, CANOPY_FLAT[ci - 1]); continue; }
+      if (od[o + 3] === 0) {
+        for (let k = 0; k < 4; k++) {
+          if (hash2(wx, wy + k, S + 81) >= 0.045) continue;
+          const rd = depthAt(wx + 0.5, wy + k + 0.5);
+          if (rd > -2.5 && rd < 1.2) {
+            const hgt = 2 + Math.floor(hash2(wx, wy + k, S + 82) * 3);
+            if (k < hgt) { putPx(od, o, PAL.reed[k === 0 ? 0 : k === hgt - 1 ? 2 : 1]); break; }
+          }
+        }
+      }
+      if (can[(py + M - 5) * CW + px + M - 4]) {
+        if (od[o + 3]) { od[o] *= 0.62; od[o + 1] *= 0.62; od[o + 2] *= 0.62; }
+        else { od[o] = 0; od[o + 1] = 10; od[o + 2] = 6; od[o + 3] = 86; }
+      }
+    }
+  }
+  octx.putImageData(oimg, 0, 0);
+  return { base, over, used: 0 };
+}
+/* ================= sprites ================= */
+const NFR = 6;
+function profile(shape, t) {
+  switch (shape) {
+    case 'disc': { const q = (t - 0.47) / 0.48; return q * q >= 1 ? 0 : Math.sqrt(1 - q * q); }
+    case 'ray': { const q = (t - 0.5) / 0.5; return q * q >= 1 ? 0 : Math.sqrt(1 - q * q); }
+    case 'eel': return t < 0.1 ? 0.35 + 0.65 * Math.sqrt(t / 0.1) : 1 - (t - 0.1) / 0.9 * 0.85;
+    case 'cat': return t < 0.18 ? 0.6 + 0.4 * Math.sqrt(t / 0.18) : 1 - (t - 0.18) / 0.82 * 0.72;
+    case 'long': return t < 0.16 ? Math.sqrt(t / 0.16) : 1 - (t - 0.16) / 0.84 * 0.5;
+    case 'shark': return t < 0.3 ? Math.sqrt(1 - ((t - 0.3) / 0.3) ** 2) : 1 - (t - 0.3) / 0.7 * 0.8;
+    default: return t < 0.35 ? Math.sqrt(Math.max(0, 1 - ((t - 0.35) / 0.35) ** 2)) : 1 - (t - 0.35) / 0.65 * 0.75;
+  }
+}
+const PEC = { fish: [0.2, 0.46], shark: [0.24, 0.56], cat: [0.16, 0.42], long: [0.16, 0.38], disc: [0.3, 0.5], eel: [0.08, 0.18] };
+function mul(c, k) { return [c[0] * k, c[1] * k, c[2] * k]; }
+
+function fishGeom(sp) {
+  const L = sp.len, W = sp.wid, shape = sp.shape || 'fish';
+  const bodyEnd = sp.bodyEnd || ({ cat: 0.8, long: 0.84, shark: 0.76 })[shape] || 0.74;
+  const tailW = W * (sp.tailW || 1.15), pecE = W * (sp.pec ?? 0.8), wl = sp.whisk ? sp.whiskLen : 0;
+  const halfH = Math.ceil(Math.max(W + pecE, tailW + L * 0.09, W * 1.4, shape === 'eel' ? W * 2.5 : 0, W * 0.4 + wl * 0.85)) + 2;
+  const front = Math.ceil(wl * 0.55) + 2, w = Math.ceil(L + front + 3), h = halfH * 2 + 1;
+  return { L, W, shape, bodyEnd, tailW, pecE, wl, w, h, cx: 2 + L / 2, cy: halfH + 0.5 };
+}
+function spineOf(g, u, ph) {
+  if (g.shape === 'eel') return g.W * 1.3 * Math.sin(u * TAU * 1.1 - ph * TAU) * Math.min(1, u * 2.5);
+  const bend = Math.sin(ph * TAU), k = g.shape === 'ray' ? 0.05 : g.shape === 'long' || g.shape === 'shark' ? 0.1 : 0.13;
+  return u > 0.28 ? bend * g.L * k * ((u - 0.28) / 0.72) ** 2 : 0;
+}
+function patColor(sp, g, t, s, sid) {
+  const as = Math.abs(s);
+  let c = sp.flank && as > (sp.flankW || 0.72) ? rgb(sp.flank) : rgb(sp.back);
+  if (!sp.flank && as > 0.8) c = mul(c, 0.84);
+  for (const r of sp.pat) {
+    const L = g.L, W = g.W;
+    switch (r.k) {
+      case 'stripe': if (t >= r.a && t <= r.b && as < r.w) c = rgb(r.c); break;
+      case 'rear': if (t >= r.a) c = rgb(r.c); break;
+      case 'bars': for (const a of r.at) if (Math.abs(t - a) < r.w) c = rgb(r.c); break;
+      case 'spots': {
+        if (t < r.a || t > r.b) break;
+        const q = L > 20 ? 2 : 1;
+        if (hash2(Math.floor(t * L / q), Math.floor((s * W + 60) / q), sid + (r.sd || 0)) < r.d) c = rgb(r.c);
+        break;
+      }
+      case 'ring': {
+        const dd = Math.hypot((t - r.t0) * L * 0.74, (s - r.s0) * W), rr = r.r * L * 0.74;
+        if (dd < rr) c = rgb(r.c); else if (r.rim && dd < rr + 1.1) c = rgb(r.rim);
+        break;
+      }
+      case 'waves': if (Math.sin(t * r.f + s * 3.4) > 0.5) c = rgb(r.c); break;
+      case 'scales': if (((Math.floor(t * L / 2) + Math.floor((s * W + 60) / 1.7)) & 1) === 1) c = rgb(r.c); break;
+      case 'scalesRear': if (t >= r.a && ((Math.floor(t * L / 2) + Math.floor((s * W + 60) / 1.7)) & 1) === 1) c = rgb(r.c); break;
+      case 'ocelli': {
+        const gx = t * L / 3.4, gy = (s * W + 60) / 3.4, ix = Math.floor(gx), iy = Math.floor(gy);
+        if (hash2(ix, iy, sid + 5) < r.d) {
+          const dd = Math.hypot(gx - ix - 0.5, gy - iy - 0.5) * 3.4;
+          if (dd < 0.9) c = rgb(r.c); else if (dd < 1.6) c = rgb(r.rim);
+        }
+        break;
+      }
+    }
+  }
+  return c;
+}
+function buildFrame(sp, g, ph, sid) {
+  const cv = document.createElement('canvas'); cv.width = g.w; cv.height = g.h;
+  const cx2 = cv.getContext('2d'), img = cx2.createImageData(g.w, g.h), d = img.data;
+  const { L, W, shape, bodyEnd, tailW, pecE } = g;
+  const finC = rgb(sp.fin), finA = Math.round(255 * (sp.finA ?? 0.7)), tailC = rgb(sp.tail), tail2 = sp.tail2 ? rgb(sp.tail2) : null;
+  const [pa, pb] = PEC[shape] || PEC.fish;
+  for (let py = 0; py < g.h; py++) for (let px = 0; px < g.w; px++) {
+    const x = px + 0.5 - g.cx, y = py + 0.5 - g.cy, u = (L / 2 - x) / L;
+    if (u < 0 || u > 1) continue;
+    const dy = y - spineOf(g, u, ph), ady = Math.abs(dy), o = (py * g.w + px) * 4;
+    if (u <= bodyEnd) {
+      const t = u / bodyEnd, hw = W * profile(shape, t);
+      if (ady <= hw) { putPx(d, o, patColor(sp, g, t, hw > 0 ? dy / hw : 0, sid)); continue; }
+      if (pecE > 0 && shape !== 'ray') {
+        let ext = 0;
+        if (t >= pa && t <= pb) { const q = (t - pa) / (pb - pa); ext = pecE * (q < 0.3 ? q / 0.3 : 1 - (q - 0.3) / 0.7); }
+        else if (shape !== 'eel' && shape !== 'disc' && t > 0.56 && t < 0.7) { const q = (t - 0.56) / 0.14; ext = pecE * 0.4 * (1 - Math.abs(q - 0.4) / 0.6); }
+        else if (shape === 'eel' && t > 0.22) ext = 1.2;
+        if (ext > 0 && ady <= hw + ext) { putPx(d, o, finC, finA); continue; }
+      }
+    } else if (shape === 'ray') {
+      const tt = (u - bodyEnd) / (1 - bodyEnd);
+      if (ady <= 0.8 * (1 - tt) + 0.45 || (tt > 0.3 && tt < 0.4 && ady < 1.7) || (tt < 0.12 && ady < W * 0.35)) putPx(d, o, tailC);
+    } else if (shape !== 'eel') {
+      const tt = (u - bodyEnd) / (1 - bodyEnd);
+      const spread = sp.round ? tailW * (0.3 + 0.75 * Math.sin(Math.PI * tt * 0.85)) : tailW * (0.28 + 0.72 * tt);
+      if (sp.fork && tt > 0.45 && ady < spread * (tt - 0.45) * 1.5) continue;
+      if (ady <= spread) putPx(d, o, tail2 && hash2(px, py, sid + 9) < 0.35 ? tail2 : tailC, tt > 0.85 ? 220 : 255);
+    }
+  }
+  // eyes
+  if (L >= 9) {
+    const te = shape === 'ray' ? 0.16 : shape === 'eel' ? 0.04 : 0.1, ue = te * bodyEnd, hw = W * profile(shape, te);
+    const ex = Math.floor(g.cx + L / 2 - ue * L), sy = spineOf(g, ue, ph);
+    for (const sgn of [-1, 1]) {
+      const ey = Math.floor(g.cy + sy + sgn * Math.max(1, hw * 0.7));
+      if (ex >= 0 && ex < g.w && ey >= 0 && ey < g.h) putPx(d, (ey * g.w + ex) * 4, [12, 14, 12]);
+      if (L >= 40 && ex + 1 < g.w) putPx(d, (ey * g.w + ex + 1) * 4, [12, 14, 12]);
+    }
+  }
+  // dark outline for readability against the water
+  const a0 = new Uint8Array(g.w * g.h); for (let i = 0; i < a0.length; i++) a0[i] = d[i * 4 + 3];
+  for (let py = 0; py < g.h; py++) for (let px = 0; px < g.w; px++) {
+    const i = py * g.w + px; if (a0[i]) continue;
+    if ((px > 0 && a0[i - 1] > 200) || (px < g.w - 1 && a0[i + 1] > 200) || (py > 0 && a0[i - g.w] > 200) || (py < g.h - 1 && a0[i + g.w] > 200)) putPx(d, i * 4, [6, 16, 13], 150);
+  }
+  // barbels
+  if (g.wl) {
+    const wc = rgb(sp.whisk), sx = g.cx + L / 2 - 1, wig = Math.sin(ph * TAU) * 0.12;
+    const pairs = sp.shape === 'cat' ? [[1, 0.55], [0.6, 1.0]] : [[0.8, 0.3]];
+    for (const sgn of [-1, 1]) for (const [lf, a0b] of pairs) {
+      const len = g.wl * lf; let x = sx, y = g.cy + sgn * W * 0.3, a = sgn * (a0b + wig);
+      for (let s = 0; s < len; s += 0.5) {
+        a += sgn * 0.5 / len * 1.3; x += Math.cos(a) * 0.5; y += Math.sin(a) * 0.5;
+        const ix = Math.floor(x), iy = Math.floor(y);
+        if (ix >= 0 && ix < g.w && iy >= 0 && iy < g.h && d[(iy * g.w + ix) * 4 + 3] < 200) putPx(d, (iy * g.w + ix) * 4, wc, 230);
+      }
+    }
+  }
+  cx2.putImageData(img, 0, 0);
+  const sh = document.createElement('canvas'); sh.width = g.w; sh.height = g.h;
+  const sc = sh.getContext('2d'); sc.drawImage(cv, 0, 0); sc.globalCompositeOperation = 'source-in'; sc.fillStyle = '#000'; sc.fillRect(0, 0, g.w, g.h);
+  return { cv, sh };
+}
+function buildBones(sp, g) {
+  const cv = document.createElement('canvas'); cv.width = g.w; cv.height = g.h;
+  const c = cv.getContext('2d'), img = c.createImageData(g.w, g.h), d = img.data;
+  const bone = rgb('#ece5cc'), boneD = rgb('#bdb393');
+  const { L, W, shape, bodyEnd, tailW } = g;
+  for (let py = 0; py < g.h; py++) for (let px = 0; px < g.w; px++) {
+    const x = px + 0.5 - g.cx, y = py + 0.5 - g.cy, u = (L / 2 - x) / L; if (u < 0 || u > 1) continue;
+    const ady = Math.abs(y), o = (py * g.w + px) * 4;
+    if (u <= bodyEnd || shape === 'eel') {
+      const t = Math.min(1, u / bodyEnd), hw = W * profile(shape, t) * (shape === 'ray' ? 0.6 : 1);
+      if (t < 0.16 && ady <= hw * 0.9) { if (!(t > 0.05 && t < 0.11 && Math.abs(ady - hw * 0.45) < 0.9)) putPx(d, o, ady > hw * 0.6 ? boneD : bone); continue; }
+      if (ady < 0.7) { putPx(d, o, bone); continue; }
+      const rib = shape === 'eel' ? (t > 0.12 && t < 0.97) : (t > 0.2 && t < 0.64);
+      if (rib && (Math.floor(u * L) & 1) === 0 && ady < hw * 0.88) putPx(d, o, boneD);
+    } else if (shape !== 'ray') {
+      const tt = (u - bodyEnd) / (1 - bodyEnd), spread = tailW * (0.28 + 0.72 * tt);
+      if (ady < 0.6 || (tt > 0.25 && Math.abs(ady - spread * 0.85) < 0.6)) putPx(d, o, boneD);
+    } else if (ady < 0.6) putPx(d, o, boneD);
+  }
+  c.putImageData(img, 0, 0); return cv;
+}
+const SPR = {};
+function buildSprites() {
+  SPECIES.forEach((sp, i) => {
+    const g = fishGeom(sp), sid = 100 + i * 17, frames = [], shadows = [];
+    for (let f = 0; f < NFR; f++) { const r = buildFrame(sp, g, f / NFR, sid); frames.push(r.cv); shadows.push(r.sh); }
+    SPR[sp.id] = { g, frames, shadows, bones: buildBones(sp, g) };
+  });
+}
+
+/* anaconda body discs */
+function makeDisc(r, pal) {
+  const s = Math.ceil(r * 2) + 2, cv = document.createElement('canvas'); cv.width = cv.height = s;
+  const c = cv.getContext('2d'), img = c.createImageData(s, s), d = img.data, cc = s / 2;
+  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+    const dx = x + 0.5 - cc, dy = y + 0.5 - cc, dist = Math.hypot(dx, dy); if (dist > r) continue;
+    const l = 0.55 - (dx * 0.5 + dy * 0.7) / r * 0.45 - (dist / r) ** 2 * 0.3;
+    putPx(d, (y * s + x) * 4, dist > r - 0.8 ? pal[0] : pal[clamp(Math.floor(l * 3 + bayer(x, y) - 0.3), 0, 2) + 1]);
+  }
+  c.putImageData(img, 0, 0); return cv;
+}
+const SNAKE_PAL = P(['#141a0c', '#3c4a1c', '#5c6e2a', '#7f9038']);
+const SPOT_PAL = P(['#0b0d06', '#16190c', '#1d2010', '#2a2c14']);
+const BONE_PAL = P(['#9c9478', '#c9c0a2', '#e6dfc4', '#f4eedb']);
+const HURT_PAL = P(['#2a0806', '#7a2216', '#b4442a', '#e0704a']);
+const DISCS = { snake: [], spot: [], bone: [], hurt: [] };
+function buildDiscs() {
+  for (let r = 1; r <= 12; r++) { DISCS.snake[r] = makeDisc(r, SNAKE_PAL); DISCS.spot[r] = makeDisc(r * 0.8 + 0.2, SPOT_PAL); DISCS.bone[r] = makeDisc(r, BONE_PAL); DISCS.hurt[r] = makeDisc(r, HURT_PAL); }
+}
+const SKULL = ['.###.', '#####', '#.#.#', '.###.', '.#.#.'];
+/* ================= game state ================= */
+const G = {
+  mode: 'title', time: 0, level: 1, prevLevel: 1, fish: [], blood: [], rings: [], bones: [], texts: [], zaps: [],
+  spawnT: 0, shake: 0, stats: null, won: false, hints: {}, lairWarnT: 0,
+};
+const S = { x: 0, y: 0, vx: 0, vy: 0, dots: [], dispT: 0, dispCd: 0, regroup: null, inv: 0, prey: null, alive: true, moving: false };
+const DISP_CD = 5, DISP_T = 1.05;
+const swarmR = () => 2.2 + 1.45 * Math.sqrt(S.dots.length);
+const levelFor = m => { let l = 1; for (let i = 0; i < LEVELS.length; i++) if (m >= LEVELS[i].need) l = i + 1; return l; };
+
+function addDots(n, x, y) {
+  for (let i = 0; i < n && S.dots.length < MAX_MASS; i++) {
+    const a = Math.random() * TAU, r = Math.sqrt(Math.random());
+    const roll = Math.random();
+    S.dots.push({ x: x + rand(-2, 2), y: y + rand(-2, 2), vx: rand(-30, 30), vy: rand(-30, 30), sx: Math.cos(a) * r, sy: Math.sin(a) * r,
+      ph: Math.random() * TAU, f: rand(2, 5), k: rand(0.75, 1.3), c: roll < 0.55 ? 0 : roll < 0.8 ? 1 : roll < 0.92 ? 2 : 3 });
+  }
+}
+function newStats() { return { eaten: 0, byTier: [0, 0, 0, 0, 0, 0, 0], biggest: null, bites: 0, peak: 1, time: 0 }; }
+
+function resetGame(seed) {
+  genWorld(seed); chunks.clear();
+  G.fish = []; G.blood = []; G.rings = []; G.bones = []; G.texts = []; G.zaps = [];
+  G.time = 0; G.spawnT = 0; G.shake = 0; G.won = false; G.stats = newStats(); G.hints = {}; G.lairWarnT = 0;
+  S.x = startPos.x; S.y = startPos.y; S.vx = S.vy = 0; S.dots = []; S.dispT = 0; S.dispCd = 0; S.regroup = null; S.inv = 0; S.prey = null; S.alive = true;
+  addDots(START_MASS, S.x, S.y);
+  G.level = G.prevLevel = 1;
+  for (const gs of guardSpots) spawnFish(pick(SPECIES_BY_TIER[gs.tier]), gs.x, gs.y, { guard: true });
+  for (let i = 0; i < 26; i++) spawnAround(true);
+  initBoss();
+  cam.x = S.x; cam.y = S.y;
+}
+
+/* ================= fish ================= */
+function spawnFish(sp, x, y, o = {}) {
+  const T = TIERS[sp.tier], g = SPR[sp.id].g;
+  const f = { sp, T, tier: sp.tier, g, x, y, a: Math.random() * TAU, v: T.cruise, hp: T.hp, state: 'wander', st: 0, attacks: sp.tier,
+    turn: 0, turnT: 0, frame: Math.random() * NFR, guard: !!o.guard, home: o.guard ? { x, y } : null, calm: false, leader: o.leader || null,
+    ox: o.ox || 0, oy: o.oy || 0, need: Math.min(g.W + 3, 12), alert: 0, patience: 14, seen: false, dead: false };
+  G.fish.push(f); return f;
+}
+function zoneMaxTier(x, y) {
+  const d = Math.hypot(x - CENTER.x, y - CENTER.y) / (WORLD / 2);
+  return d > 0.7 ? 2 : d > 0.5 ? 3 : d > 0.32 ? 4 : d > 0.18 ? 5 : 6;
+}
+function chooseTier(x, y) {
+  const zm = zoneMaxTier(x, y), w = [];
+  let sum = 0;
+  for (let t = 1; t <= 6; t++) {
+    let k = TIERS[t].weight * (t <= zm ? 1 : t === zm + 1 ? 0.13 : 0);
+    // as the swarm grows, thin out prey that is far too small to matter
+    const he = highestEdibleTier();
+    if (t === he) k *= 2; else if (t < he - 1) k *= 0.45;
+    w[t] = k; sum += k;
+  }
+  let r = Math.random() * sum;
+  for (let t = 1; t <= 6; t++) { r -= w[t]; if (r <= 0) return t; }
+  return 1;
+}
+function highestEdibleTier() { let e = 1; for (let t = 1; t <= 6; t++) if (G.level >= TIERS[t].eat) e = t; return e; }
+function spawnAround(initial) {
+  const near = initial ? 70 : viewHalfDiag() + 30, far = initial ? 700 : viewHalfDiag() + 260;
+  for (let tries = 0; tries < 12; tries++) {
+    const a = Math.random() * TAU, r = rand(near, far), x = S.x + Math.cos(a) * r, y = S.y + Math.sin(a) * r;
+    if (x < 100 || y < 100 || x > WORLD - 100 || y > WORLD - 100) continue;
+    if (Math.hypot(x - CENTER.x, y - CENTER.y) < LAGOON_R + 30) continue;
+    let tier = chooseTier(x, y);
+    if (initial && (tier > 2 || r < 260)) tier = 1;
+    const sp = pick(SPECIES_BY_TIER[tier]), g = SPR[sp.id].g;
+    if (depthAt(x, y) < Math.min(g.W + 4, 13)) continue;
+    const lead = spawnFish(sp, x, y);
+    if (sp.school) {
+      const n = randi(sp.school[0], sp.school[1]) - 1;
+      for (let i = 0; i < n; i++) {
+        const ox = rand(-14, 6), oy = rand(-10, 10);
+        if (depthAt(x + ox, y + oy) > 2) spawnFish(sp, x + ox, y + oy, { leader: lead, ox, oy });
+      }
+    }
+    return true;
+  }
+  return false;
+}
+const fishHalfLen = f => f.g.L * 0.5;
+function steerWater(f, desired, look) {
+  const ca = Math.cos(f.a), sa = Math.sin(f.a), lx = f.x + ca * look, ly = f.y + sa * look;
+  const dl = depthAt(lx, ly);
+  if (dl < f.need) {
+    const gr = gradAt(lx, ly), ga = Math.atan2(gr.y, gr.x);
+    const k = clamp((f.need - dl) / f.need, 0, 1);
+    return f.a + angDiff(f.a, ga) * (0.4 + 0.6 * k) + angDiff(f.a, desired) * (1 - k) * 0.3;
+  }
+  return desired;
+}
+function updateFish(f, dt) {
+  const dx = S.x - f.x, dy = S.y - f.y, dist = Math.hypot(dx, dy), R = swarmR();
+  const edible = G.level >= f.T.eat && S.alive, T = f.T;
+  let desired = f.a, speed = T.cruise, turnRate = T.turn;
+  const contact = edible && S.dispT <= 0 && dist < R + fishHalfLen(f) * 0.6 + 2;
+  f.alert = Math.max(0, f.alert - dt);
+  if (edible && f.state !== 'wander' && f.state !== 'flee' && f.state !== 'caught') f.state = 'flee';
+  if (edible) {
+    if (contact) {
+      f.state = 'caught';
+      f.hp -= Math.sqrt(S.dots.length) * 4.2 * dt;
+      speed = T.flee * 0.22; desired = f.a + Math.sin(G.time * 18 + f.x) * 1.6; turnRate = 8;
+      if (Math.random() < dt * (6 + f.tier * 4)) bleed(f.x + rand(-f.g.W, f.g.W), f.y + rand(-f.g.W, f.g.W), 1 + f.tier);
+      if (!S.prey || S.prey.dead || Math.hypot(S.prey.x - S.x, S.prey.y - S.y) > dist) S.prey = f;
+      if (f.hp <= 0) { eatFish(f); return; }
+    } else if (dist < 40 + R + f.g.L * 0.6) {
+      f.state = 'flee'; desired = Math.atan2(-dy, -dx); f.fleeT = (f.fleeT || 0) + dt;
+      speed = T.flee * (f.fleeT > 1.8 ? 0.72 : 1);
+    } else { f.state = 'wander'; f.fleeT = Math.max(0, (f.fleeT || 0) - dt * 0.5); }
+  } else {
+    // too big to eat: aggressive
+    const aggroR = (f.guard ? 70 : 46) + f.tier * 12;
+    switch (f.state) {
+      case 'wander': case 'flee': case 'caught':
+        f.state = 'wander';
+        if (!f.calm && S.alive && f.attacks > 0 && dist < aggroR && G.mode === 'play') {
+          f.state = 'alert'; f.st = f.seen ? 0.38 : 0.62; f.seen = true; f.alert = 0.9; sfx.alert(f.tier);
+          if (!G.hints.scatter) { G.hints.scatter = 1; showHint('A big fish has spotted you. Double-tap to scatter before it bites.', 4); }
+        }
+        break;
+      case 'alert':
+        speed = 4; desired = Math.atan2(dy, dx); turnRate = T.turn * 1.4; f.st -= dt;
+        if (f.st <= 0) { f.state = 'charge'; f.st = 3.2; }
+        break;
+      case 'charge': {
+        const px = S.x + S.vx * 0.25, py = S.y + S.vy * 0.25;
+        desired = Math.atan2(py - f.y, px - f.x); speed = T.charge; turnRate = T.turn * 0.9;
+        const hx = f.x + Math.cos(f.a) * f.g.L * 0.42, hy = f.y + Math.sin(f.a) * f.g.L * 0.42;
+        if (S.inv <= 0 && Math.hypot(hx - S.x, hy - S.y) < R * 0.6 + 3) {
+          biteSwarm(f, hx, hy); f.attacks--; f.state = 'retreat'; f.st = rand(1.0, 1.4);
+        } else { f.st -= dt; if (f.st <= 0) { f.state = 'retreat'; f.st = 0.8; } }
+        break;
+      }
+      case 'retreat':
+        desired = Math.atan2(-dy, -dx); speed = T.charge * 0.6; f.st -= dt;
+        if (f.st <= 0) {
+          if (f.attacks > 0 && dist < aggroR * 1.8 && f.patience > 0) { f.state = 'alert'; f.st = 0.36; f.alert = 0.7; sfx.alert(f.tier); }
+          else if (f.attacks > 0) f.state = 'wander';
+          else { f.state = f.guard ? 'rest' : 'leave'; f.st = 10; if (!f.guard) f.calm = true; }
+        }
+        break;
+      case 'leave':
+        desired = Math.atan2(-dy, -dx); speed = T.cruise * 1.5; break;
+      case 'rest':
+        f.st -= dt; if (f.st <= 0) { f.state = 'wander'; f.attacks = f.tier; f.patience = 14; }
+        break;
+    }
+    if (f.state === 'alert' || f.state === 'charge' || f.state === 'retreat') f.patience -= dt;
+  }
+  if (f.state === 'wander' || f.state === 'rest') {
+    f.turnT -= dt;
+    if (f.turnT <= 0) { f.turnT = rand(0.8, 2.6); f.turn = rand(-0.9, 0.9); f.cruise = T.cruise * rand(0.6, 1.25); }
+    desired = f.a + f.turn; speed = f.cruise || T.cruise;
+    if (f.leader && !f.leader.dead && f.leader.state !== 'caught') {
+      const la = f.leader.a, tx = f.leader.x + Math.cos(la) * f.ox - Math.sin(la) * f.oy, ty = f.leader.y + Math.sin(la) * f.ox + Math.cos(la) * f.oy;
+      const ld = Math.hypot(tx - f.x, ty - f.y);
+      desired = Math.atan2(ty - f.y, tx - f.x); speed = clamp(ld * 2.2, 6, T.flee * 0.8);
+    }
+    if (f.home) {
+      const hd = Math.hypot(f.home.x - f.x, f.home.y - f.y);
+      if (hd > 110) desired = Math.atan2(f.home.y - f.y, f.home.x - f.x);
+    }
+  }
+  desired = steerWater(f, desired, f.g.L * 0.5 + 8);
+  const da = angDiff(f.a, desired), maxT = turnRate * dt;
+  f.a += clamp(da, -maxT, maxT);
+  f.v += (speed - f.v) * Math.min(1, dt * (f.state === 'charge' ? 2.2 : 3));
+  const nx = f.x + Math.cos(f.a) * f.v * dt, ny = f.y + Math.sin(f.a) * f.v * dt;
+  if (depthAt(nx, ny) > Math.min(f.need * 0.6, 5)) { f.x = nx; f.y = ny; }
+  else { const gr = gradAt(f.x, f.y); f.a = Math.atan2(gr.y, gr.x) + rand(-0.6, 0.6); f.v *= 0.5; f.x += gr.x * 0.6; f.y += gr.y * 0.6; }
+  if (f.guard && f.state !== 'charge' && f.state !== 'retreat' && f.state !== 'alert' && Math.hypot(f.x - CENTER.x, f.y - CENTER.y) < LAGOON_R + 10) {
+    f.a = Math.atan2(f.y - CENTER.y, f.x - CENTER.x);
+  }
+  f.frame = (f.frame + dt * (2 + f.v * (f.tier >= 5 ? 0.1 : 0.22) + (f.state === 'caught' ? 14 : 0))) % NFR;
+}
+function eatFish(f) {
+  f.dead = true;
+  const food = randi(f.T.food[0], f.T.food[1]);
+  addDots(food, f.x, f.y);
+  bleed(f.x, f.y, 10 + f.tier * 14, f.g.L * 0.3);
+  G.rings.push({ x: f.x, y: f.y, r: f.g.W, vr: 30 + f.tier * 8, life: 0.6, max: 0.6, c: '#d8f0dc' });
+  G.bones.push({ spr: SPR[f.sp.id].bones, g: f.g, x: f.x, y: f.y, a: f.a, life: 6, max: 6 });
+  floatText(f.x, f.y - f.g.W - 4, '+' + food, '#fff3a0', f.tier >= 4 ? 1.35 : 1);
+  G.stats.eaten++; G.stats.byTier[f.tier]++;
+  if (!G.stats.biggest || f.tier >= G.stats.biggest.tier) G.stats.biggest = f.sp;
+  G.shake = Math.max(G.shake, f.tier >= 3 ? f.tier * 0.8 : 0);
+  sfx.chomp(f.tier);
+  if (S.prey === f) S.prey = null;
+  if (!G.hints.ate) { G.hints.ate = 1; showHint('Fish with a red skull are too big for you. They bite until they get bored.', 4.5); }
+}
+function biteSwarm(f, hx, hy) {
+  const br = Math.max(3.5, f.g.W * 1.1 + f.g.L * 0.12), cap = f.T.dmg;
+  let killed = 0;
+  for (let i = S.dots.length - 1; i >= 0 && killed < cap; i--) {
+    const d = S.dots[i];
+    if (Math.hypot(d.x - hx, d.y - hy) < br) { bleed(d.x, d.y, 2); S.dots[i] = S.dots[S.dots.length - 1]; S.dots.pop(); killed++; }
+  }
+  for (const d of S.dots) { const ex = d.x - hx, ey = d.y - hy, l = Math.hypot(ex, ey) || 1; if (l < br * 2.5) { d.vx += ex / l * 140; d.vy += ey / l * 140; } }
+  S.inv = 0.45; G.stats.bites++; G.lastBiter = f.sp.name;
+  if (f.sp.id === 'eel') for (let i = 0; i < 6; i++) G.zaps.push({ x: hx, y: hy, a: Math.random() * TAU, len: rand(8, 22), life: 0.35 });
+  if (killed > 0) {
+    floatText(hx, hy - 6, '-' + killed, '#ff5a4a', 1 + Math.min(0.6, killed / 40));
+    G.shake = Math.max(G.shake, 3 + f.tier * 1.4); flashHurt(Math.min(1, 0.35 + killed / 30)); sfx.hit(f.tier);
+  } else { floatText(hx, hy - 6, 'MISS', '#e8f4ea', 1); sfx.miss(); }
+}
+function bleed(x, y, n, spread = 2) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, s = rand(4, 22);
+    G.blood.push({ x: x + Math.cos(a) * rand(0, spread), y: y + Math.sin(a) * rand(0, spread), vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      life: rand(1.2, 3), max: 3, c: Math.random() < 0.6 ? '#8e1616' : Math.random() < 0.6 ? '#b42420' : '#5e0c0c' });
+  }
+  if (G.blood.length > 1600) G.blood.splice(0, G.blood.length - 1600);
+}
+function floatText(x, y, txt, col, size = 1) { G.texts.push({ x, y, txt, col, size, life: 1.1, max: 1.1 }); }
+
+/* ================= anaconda ================= */
+const boss = { segs: [], n: 46, sp: 4.3, a: 0, state: 'idle', st: 0, hp: 1300, max: 1300, tx: 0, ty: 0, vis: 0.3, dead: false, engaged: false, hurt: 0, strikeA: 0, deathT: 0, unlocked: false };
+function initBoss() {
+  boss.segs = []; boss.state = 'idle'; boss.hp = boss.max; boss.dead = false; boss.engaged = false; boss.vis = 0.3; boss.deathT = 0; boss.unlocked = false;
+  for (let i = 0; i < boss.n; i++) boss.segs.push({ x: CENTER.x - i * boss.sp, y: CENTER.y + 30 });
+  boss.a = 0; boss.tx = CENTER.x; boss.ty = CENTER.y;
+}
+const segR = i => { const t = i / (boss.n - 1); return Math.max(1.5, (t < 0.08 ? 5.5 + t * 20 : 7.6 * (1 - Math.pow((t - 0.08) / 0.92, 1.6)) + 1.5)); };
+function updateBoss(dt) {
+  if (boss.dead) { boss.deathT += dt; return; }
+  const h = boss.segs[0], dS = Math.hypot(S.x - CENTER.x, S.y - CENTER.y), inLair = S.alive && dS < LAGOON_R + 25;
+  const dx = S.x - h.x, dy = S.y - h.y, dist = Math.hypot(dx, dy), R = swarmR();
+  boss.engaged = inLair || (boss.engaged && dS < LAGOON_R + 120);
+  // once a max-level swarm enters the lagoon the fight is on, even if bites knock it down a level
+  if (inLair && G.level >= MAX_LEVEL) boss.unlocked = true;
+  boss.vis += ((dS < LAGOON_R + 160 ? 1 : 0.32) - boss.vis) * Math.min(1, dt * 2);
+  boss.hurt = Math.max(0, boss.hurt - dt);
+  let speed = 26, desired = boss.a, turn = 2.2;
+  // being eaten (max level only)
+  let touching = false;
+  if (S.alive && boss.unlocked && S.dispT <= 0) {
+    let best = 1e9, bi = 0;
+    for (let i = 0; i < boss.n; i += 2) { const s = boss.segs[i], dd = Math.hypot(s.x - S.x, s.y - S.y); if (dd < best) { best = dd; bi = i; } }
+    if (best < segR(bi) + R * 0.6) {
+      touching = true; boss.hp -= Math.sqrt(S.dots.length) * 4.2 * 0.55 * dt; boss.hurt = 0.2;
+      S.prey = { x: boss.segs[bi].x, y: boss.segs[bi].y, dead: false, g: { W: segR(bi), L: 8 }, boss: true };
+      if (Math.random() < dt * 30) bleed(boss.segs[bi].x + rand(-4, 4), boss.segs[bi].y + rand(-4, 4), 2);
+      if (boss.hp <= 0) { killBoss(); return; }
+    }
+  }
+  switch (boss.state) {
+    case 'idle':
+      if (Math.hypot(boss.tx - h.x, boss.ty - h.y) < 30) { const a = Math.random() * TAU, r = Math.random() * (LAGOON_R - 70); boss.tx = CENTER.x + Math.cos(a) * r; boss.ty = CENTER.y + Math.sin(a) * r; }
+      desired = Math.atan2(boss.ty - h.y, boss.tx - h.x);
+      if (inLair) { boss.state = 'stalk'; boss.st = rand(0.6, 1.4); sfx.hiss(); }
+      break;
+    case 'stalk':
+      speed = touching ? 58 : 48; desired = Math.atan2(dy, dx) + (touching ? Math.sin(G.time * 5) * 0.9 : 0);
+      if (!touching && dist < 70) speed = 10;
+      boss.st -= dt;
+      if (!inLair) { boss.state = 'idle'; break; }
+      if (boss.st <= 0 && dist < 160) { boss.state = 'coil'; boss.st = boss.unlocked ? 0.9 : 0.6; }
+      break;
+    case 'coil':
+      speed = 3; desired = Math.atan2(dy, dx); turn = 5; boss.st -= dt;
+      if (boss.st <= 0) { boss.state = 'strike'; boss.st = clamp(dist / 250 + 0.15, 0.3, 0.75); boss.strikeA = Math.atan2(S.y + S.vy * 0.2 - h.y, S.x + S.vx * 0.2 - h.x); sfx.hiss(); }
+      break;
+    case 'strike':
+      speed = 250; desired = boss.strikeA; turn = 1.2; boss.st -= dt;
+      if (S.inv <= 0 && dist < R * 0.65 + 6) { snakeBite(h.x, h.y); boss.state = 'recover'; boss.st = 1.3; }
+      else if (boss.st <= 0) { boss.state = 'recover'; boss.st = 1.0; }
+      break;
+    case 'recover':
+      speed = 30; desired = Math.atan2(-dy, -dx); boss.st -= dt;
+      if (boss.st <= 0) { boss.state = inLair ? 'stalk' : 'idle'; boss.st = touching ? rand(0.6, 1.4) : rand(1.2, 2.6); }
+      break;
+  }
+  // stay inside the lagoon
+  const look = 14, lx = h.x + Math.cos(boss.a) * look, ly = h.y + Math.sin(boss.a) * look;
+  if (depthAt(lx, ly) < 8 || Math.hypot(lx - CENTER.x, ly - CENTER.y) > LAGOON_R + 10) desired = Math.atan2(CENTER.y - h.y, CENTER.x - h.x);
+  desired += Math.sin(G.time * 3.2) * 0.35;
+  const da = angDiff(boss.a, desired); boss.a += clamp(da, -turn * dt, turn * dt);
+  const nx = h.x + Math.cos(boss.a) * speed * dt, ny = h.y + Math.sin(boss.a) * speed * dt;
+  if (depthAt(nx, ny) > 4) { h.x = nx; h.y = ny; }
+  for (let i = 1; i < boss.n; i++) {
+    const p = boss.segs[i - 1], s = boss.segs[i], ex = s.x - p.x, ey = s.y - p.y, l = Math.hypot(ex, ey) || 1;
+    if (l > boss.sp) { s.x = p.x + ex / l * boss.sp; s.y = p.y + ey / l * boss.sp; }
+  }
+}
+function snakeBite(x, y) {
+  const cap = boss.unlocked ? 32 : 70, br = 16;
+  let killed = 0;
+  for (let i = S.dots.length - 1; i >= 0 && killed < cap; i--) {
+    const d = S.dots[i]; if (Math.hypot(d.x - x, d.y - y) < br) { bleed(d.x, d.y, 2); S.dots[i] = S.dots[S.dots.length - 1]; S.dots.pop(); killed++; }
+  }
+  S.inv = 0.5; G.lastBiter = 'Green Anaconda';
+  if (killed) { floatText(x, y - 8, '-' + killed, '#ff5a4a', 1.5); G.shake = 12; flashHurt(1); sfx.hit(6); }
+  else { floatText(x, y - 8, 'MISS', '#e8f4ea', 1.2); sfx.miss(); }
+}
+function killBoss() {
+  boss.dead = true; boss.engaged = false; boss.deathT = 0; S.prey = null;
+  for (let i = 0; i < boss.n; i += 2) bleed(boss.segs[i].x, boss.segs[i].y, 14, 6);
+  addDots(120, boss.segs[8].x, boss.segs[8].y);
+  G.shake = 16; sfx.win(); G.won = true;
+  floatText(boss.segs[0].x, boss.segs[0].y - 12, 'APEX', '#ff3b30', 2);
+  G.stats.biggest = { name: 'Green Anaconda', tier: 7 };
+  setTimeout(() => { if (G.mode === 'play') endGame(true); }, 2600);
+}
+/* ================= swarm ================= */
+const input = { down: false, id: null, x: 0, y: 0, lastTap: 0, lx: 0, ly: 0, keys: {} };
+const cam = { x: 0, y: 0, left: 0, top: 0 };
+let SCALE = 3, viewW = 300, viewH = 300, DPR = 1;
+const viewHalfDiag = () => Math.hypot(viewW, viewH) / 2;
+const worldToCss = (x, y) => ({ x: (x - cam.left) * SCALE / DPR, y: (y - cam.top) * SCALE / DPR });
+const cssToWorld = (x, y) => ({ x: x * DPR / SCALE + cam.left, y: y * DPR / SCALE + cam.top });
+
+function updateSwarm(dt) {
+  let mx = 0, my = 0, spd = 0;
+  if (G.mode === 'title') { const a = G.time * 0.25; mx = Math.cos(a); my = Math.sin(a * 1.3); spd = 0.35; }
+  else if (S.alive) {
+    const k = input.keys, kx = (k.ArrowRight || k.KeyD ? 1 : 0) - (k.ArrowLeft || k.KeyA ? 1 : 0), ky = (k.ArrowDown || k.KeyS ? 1 : 0) - (k.ArrowUp || k.KeyW ? 1 : 0);
+    if (kx || ky) { const l = Math.hypot(kx, ky); mx = kx / l; my = ky / l; spd = 1; }
+    else if (input.down) {
+      const p = worldToCss(S.x, S.y), dx = input.x - p.x, dy = input.y - p.y, dd = Math.hypot(dx, dy);
+      if (dd > 8) { mx = dx / dd; my = dy / dd; spd = clamp((dd - 8) / 45, 0.25, 1); }
+    }
+  }
+  const maxV = 70 + G.level * 2.5;
+  if (S.dispT > 0 && S.regroup) {
+    const ex = S.regroup.x - S.x, ey = S.regroup.y - S.y, el = Math.hypot(ex, ey);
+    const v = el > 1.5 ? Math.min(280, el * 6) : 0;
+    S.vx = el > 0 ? ex / el * v : 0; S.vy = el > 0 ? ey / el * v : 0;
+  } else {
+    let tvx = mx * maxV * spd, tvy = my * maxV * spd;
+    const pr = S.prey;
+    if (pr && !pr.dead && !pr.boss) { tvx += (pr.x - S.x) * 1.4; tvy += (pr.y - S.y) * 1.4; }
+    else if (G.mode === 'play') {
+      // gentle homing on the closest edible fish within reach
+      const R = swarmR(); let best = null, bd = R + 10;
+      for (const f of G.fish) { if (f.dead || G.level < f.T.eat) continue; const d = Math.abs(f.x - S.x) + Math.abs(f.y - S.y); if (d < bd) { bd = d; best = f; } }
+      if (best) { tvx += (best.x - S.x) * 1.6; tvy += (best.y - S.y) * 1.6; }
+    }
+    S.vx += (tvx - S.vx) * Math.min(1, dt * 5); S.vy += (tvy - S.vy) * Math.min(1, dt * 5);
+  }
+  const nx = S.x + S.vx * dt, ny = S.y + S.vy * dt;
+  if (depthAt(nx, ny) > 2) { S.x = nx; S.y = ny; }
+  else if (depthAt(nx, S.y) > 2) { S.x = nx; S.vy *= 0.5; }
+  else if (depthAt(S.x, ny) > 2) { S.y = ny; S.vx *= 0.5; }
+  else { const g = gradAt(S.x, S.y); S.x += g.x * 0.8; S.y += g.y * 0.8; S.vx *= 0.3; S.vy *= 0.3; }
+  if (depthAt(S.x, S.y) < 2.5) { const g = gradAt(S.x, S.y); S.x += g.x * 20 * dt; S.y += g.y * 20 * dt; }
+  S.moving = Math.hypot(S.vx, S.vy) > 8;
+  S.dispT = Math.max(0, S.dispT - dt); S.dispCd = Math.max(0, S.dispCd - dt); S.inv = Math.max(0, S.inv - dt);
+  if (S.dispT <= 0) S.regroup = null;
+  if (S.prey && (S.prey.dead || Math.hypot(S.prey.x - S.x, S.prey.y - S.y) > swarmR() + S.prey.g.L)) S.prey = null;
+
+  const R = swarmR(), t = G.time, scatter = S.dispT > DISP_T - 0.32;
+  const vl = Math.hypot(S.vx, S.vy), mxn = vl > 1 ? S.vx / vl : 0, myn = vl > 1 ? S.vy / vl : 0, stretch = clamp(vl / 80, 0, 1) * 0.9;
+  let prey = S.dispT <= 0 ? S.prey : null;
+  if (prey && prey.dead) prey = null;
+  const breathe = 1 + Math.sin(t * 1.7) * 0.06;
+  for (let i = 0; i < S.dots.length; i++) {
+    const d = S.dots[i];
+    if (scatter) { d.vx *= 1 - 1.6 * dt; d.vy *= 1 - 1.6 * dt; }
+    else {
+      let tx, ty;
+      if (prey && i % 5 < 3) {
+        const pr = Math.max(2, prey.g.W * 1.1);
+        tx = prey.x + d.sx * pr + Math.sin(t * 9 + d.ph) * 1.6; ty = prey.y + d.sy * pr + Math.cos(t * 8 + d.ph) * 1.6;
+      } else {
+        const along = d.sx * mxn + d.sy * myn, back = along < 0 ? along * R * stretch : 0;
+        tx = S.x + d.sx * R * breathe + mxn * back + Math.sin(t * d.f + d.ph) * 1.8;
+        ty = S.y + d.sy * R * breathe + myn * back + Math.cos(t * d.f * 0.9 + d.ph) * 1.8;
+      }
+      const K = (S.dispT > 0 ? 45 : 110) * d.k, D = 15;
+      d.vx += ((tx - d.x) * K - d.vx * D) * dt; d.vy += ((ty - d.y) * K - d.vy * D) * dt;
+    }
+    d.x += d.vx * dt; d.y += d.vy * dt;
+    if (depthAt(d.x, d.y) < -1) { d.x += (S.x - d.x) * 0.25; d.y += (S.y - d.y) * 0.25; d.vx *= 0.5; d.vy *= 0.5; }
+  }
+}
+function triggerScatter() {
+  if (G.mode !== 'play' || !S.alive || S.dispCd > 0) return;
+  S.dispT = DISP_T; S.dispCd = DISP_CD; S.prey = null;
+  let tx, ty;
+  if (input.down) { const w = cssToWorld(input.x, input.y); tx = w.x; ty = w.y; }
+  else { const vl = Math.hypot(S.vx, S.vy); tx = S.x + (vl > 5 ? S.vx / vl : 0) * 90; ty = S.y + (vl > 5 ? S.vy / vl : 0) * 90; }
+  let ex = tx - S.x, ey = ty - S.y; const el = Math.hypot(ex, ey);
+  if (el > 150) { ex *= 150 / el; ey *= 150 / el; }
+  let best = { x: S.x, y: S.y };
+  for (let s = 0.05; s <= 1.0001; s += 0.05) { const px = S.x + ex * s, py = S.y + ey * s; if (depthAt(px, py) > 3) best = { x: px, y: py }; else break; }
+  S.regroup = best;
+  for (const d of S.dots) { const a = Math.atan2(d.sy, d.sx) + rand(-0.6, 0.6), sp = rand(110, 240); d.vx = Math.cos(a) * sp + S.vx * 0.3; d.vy = Math.sin(a) * sp + S.vy * 0.3; }
+  G.rings.push({ x: S.x, y: S.y, r: swarmR(), vr: 130, life: 0.5, max: 0.5, c: '#e8f4ea' });
+  if (best.x !== S.x || best.y !== S.y) G.rings.push({ x: best.x, y: best.y, r: 26, vr: -40, life: 0.55, max: 0.55, c: '#ffd23a' });
+  sfx.scatter();
+}
+
+/* ================= simulation step ================= */
+function step(dt) {
+  G.time += dt;
+  if (G.mode === 'play') G.stats.time += dt;
+  updateSwarm(dt);
+  for (let i = 0; i < G.fish.length; i++) { const f = G.fish[i]; if (!f.dead) updateFish(f, dt); }
+  updateBoss(dt);
+  // population around the swarm
+  G.spawnT -= dt;
+  if (G.spawnT <= 0) {
+    G.spawnT = 0.3;
+    let n = 0; const lim = viewHalfDiag() + 300;
+    for (const f of G.fish) if (!f.guard && !f.dead && Math.abs(f.x - S.x) < lim && Math.abs(f.y - S.y) < lim) n++;
+    if (n < 34) spawnAround(false);
+  }
+  const far = viewHalfDiag() + 520;
+  G.fish = G.fish.filter(f => !f.dead && (f.guard || Math.hypot(f.x - S.x, f.y - S.y) < far));
+  // particles
+  for (const p of G.blood) { const k = 1 - 2.4 * dt; p.vx *= k; p.vy *= k; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+  G.blood = G.blood.filter(p => p.life > 0);
+  for (const r of G.rings) { r.r = Math.max(0, r.r + r.vr * dt); r.life -= dt; }
+  G.rings = G.rings.filter(r => r.life > 0);
+  for (const b of G.bones) b.life -= dt;
+  G.bones = G.bones.filter(b => b.life > 0);
+  for (const t of G.texts) t.life -= dt;
+  G.texts = G.texts.filter(t => t.life > 0);
+  for (const z of G.zaps) z.life -= dt;
+  G.zaps = G.zaps.filter(z => z.life > 0);
+  // level
+  if (G.mode === 'play') {
+    const lv = levelFor(S.dots.length);
+    if (lv !== G.level) {
+      G.level = lv; G.stats.peak = Math.max(G.stats.peak, lv);
+      if (lv === MAX_LEVEL && !G.hints.max) { G.hints.max = 1; setTimeout(() => showHint('MAX MASS. The lagoon at the centre of the map is open. Hunt the anaconda.', 5), 2300); }
+    }
+    if (S.alive && S.dots.length < DEAD_MASS) {
+      S.alive = false; for (const d of S.dots) bleed(d.x, d.y, 4, 3); S.dots = []; sfx.dead();
+      setTimeout(() => { if (G.mode === 'play') endGame(false); }, 1500);
+    }
+    G.lairWarnT -= dt;
+    if (G.level < MAX_LEVEL && !boss.dead && !boss.unlocked && G.lairWarnT <= 0 && Math.hypot(S.x - CENTER.x, S.y - CENTER.y) < LAGOON_R + 420) {
+      G.lairWarnT = 16; showHint('The anaconda’s lagoon is ahead. Come back at LV 10, AMAZON APOCALYPSE.', 4.5);
+    }
+    G.birdT = (G.birdT || 3) - dt;
+    if (G.birdT <= 0) { G.birdT = rand(2.5, 7); sfx.bird(); }
+  }
+  // camera with a little look-ahead
+  const tx = S.x + S.vx * 0.35, ty = S.y + S.vy * 0.35;
+  cam.x += (tx - cam.x) * Math.min(1, dt * 3.2); cam.y += (ty - cam.y) * Math.min(1, dt * 3.2);
+  cam.x = clamp(cam.x, viewW / 2, WORLD - viewW / 2); cam.y = clamp(cam.y, viewH / 2, WORLD - viewH / 2);
+  G.shake = Math.max(0, G.shake - dt * 22);
+}
+
+/* ================= rendering ================= */
+const cv = document.getElementById('game'), ctx = cv.getContext('2d');
+const buf = document.createElement('canvas'), bx = buf.getContext('2d');
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
+  cv.width = Math.round(innerWidth * DPR); cv.height = Math.round(innerHeight * DPR);
+  SCALE = Math.max(2, Math.round(Math.min(cv.width, cv.height) / (cv.height > cv.width ? 235 : 285)));
+  viewW = Math.ceil(cv.width / SCALE); viewH = Math.ceil(cv.height / SCALE);
+  buf.width = viewW; buf.height = viewH;
+  bx.imageSmoothingEnabled = false; ctx.imageSmoothingEnabled = false;
+}
+function drawRot(img, x, y, a, g, alpha) {
+  bx.globalAlpha = alpha;
+  bx.setTransform(1, 0, 0, 1, Math.round(x - cam.left), Math.round(y - cam.top));
+  bx.rotate(a); bx.drawImage(img, -g.cx, -g.cy);
+  bx.setTransform(1, 0, 0, 1, 0, 0);
+}
+const DOT_COL = ['#11171a', '#283135', '#cf432c', '#b9cac5'];
+let lastGen = 0;
+function drawDots(L, T, alpha) {
+  const t = G.time;
+  for (let c = 0; c < 4; c++) {
+    bx.globalAlpha = alpha; bx.fillStyle = DOT_COL[c];
+    for (const d of S.dots) {
+      let dc = d.c;
+      if (dc >= 2 && Math.sin(t * d.f * 1.7 + d.ph) < 0.35) dc = 1;
+      if (dc === c) bx.fillRect(Math.round(d.x - L), Math.round(d.y - T), 1, 1);
+    }
+  }
+  bx.globalAlpha = 1;
+}
+function render() {
+  const sh = G.shake;
+  cam.left = Math.round(cam.x - viewW / 2); cam.top = Math.round(cam.y - viewH / 2);
+  const L = cam.left + Math.round(rand(-sh, sh) * 0.5), T = cam.top + Math.round(rand(-sh, sh) * 0.5);
+  const camL = cam.left, camT = cam.top; cam.left = L; cam.top = T;
+  bx.globalAlpha = 1; bx.fillStyle = '#1b2d1c'; bx.fillRect(0, 0, viewW, viewH);
+  const c0 = Math.floor(L / CH), c1 = Math.floor((L + viewW) / CH), r0 = Math.floor(T / CH), r1 = Math.floor((T + viewH) / CH);
+  const vis = [];
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
+    if (cx < 0 || cy < 0 || cx >= NCH || cy >= NCH) continue;
+    const c = getChunk(cx, cy, true); vis.push([c, cx, cy]);
+    bx.drawImage(c.base, cx * CH - L, cy * CH - T);
+  }
+  if (chunkGen === lastGen) {
+    outer: for (let cy = r0 - 1; cy <= r1 + 1; cy++) for (let cx = c0 - 1; cx <= c1 + 1; cx++) {
+      if (cx < 0 || cy < 0 || cx >= NCH || cy >= NCH || chunks.has(cy * NCH + cx)) continue;
+      getChunk(cx, cy, true); break outer;
+    }
+  }
+  lastGen = chunkGen;
+  // sunlight glints on the surface
+  bx.fillStyle = 'rgba(200,236,216,.55)';
+  const SG = 18;
+  for (let gy = Math.floor(T / SG); gy <= (T + viewH) / SG; gy++) for (let gx = Math.floor(L / SG); gx <= (L + viewW) / SG; gx++) {
+    const h = hash2(gx, gy, SEED + 91), ph = (G.time * 0.55 + h * 7) % 1;
+    if (ph > 0.12) continue;
+    const sx = (gx + hash2(gx, gy, SEED + 92)) * SG, sy = (gy + hash2(gx, gy, SEED + 93)) * SG;
+    if (depthAt(sx, sy) < 4) continue;
+    bx.fillRect(Math.round(sx - L), Math.round(sy - T), ph < 0.06 ? 2 : 1, 1);
+  }
+  const inView = (x, y, m) => x > L - m && x < L + viewW + m && y > T - m && y < T + viewH + m;
+  for (const b of G.bones) if (inView(b.x, b.y, 60)) drawRot(b.spr, b.x, b.y, b.a, b.g, Math.min(1, b.life / 2.5) * 0.85);
+  const vf = G.fish.filter(f => inView(f.x, f.y, 90)).sort((a, b) => a.tier - b.tier);
+  for (const f of vf) drawRot(SPR[f.sp.id].shadows[Math.floor(f.frame)], f.x + 2, f.y + 3, f.a, f.g, 0.26);
+  for (const f of vf) drawRot(SPR[f.sp.id].frames[Math.floor(f.frame)], f.x, f.y, f.a, f.g, f.state === 'caught' ? 0.85 + Math.sin(G.time * 40) * 0.15 : 0.95);
+  drawBoss(L, T);
+  for (const p of G.blood) {
+    bx.globalAlpha = clamp(p.life / p.max * 1.3, 0, 0.9); bx.fillStyle = p.c;
+    bx.fillRect(Math.round(p.x - L), Math.round(p.y - T), 1, 1);
+  }
+  // the swarm
+  bx.globalAlpha = 0.16; bx.fillStyle = '#020806';
+  for (const d of S.dots) bx.fillRect(Math.round(d.x - L), Math.round(d.y - T) + 1, 2, 2);
+  bx.globalAlpha = 1;
+  drawDots(L, T, 1);
+  for (const r of G.rings) {
+    bx.globalAlpha = clamp(r.life / r.max, 0, 1) * 0.8; bx.fillStyle = r.c;
+    const n = Math.max(10, Math.floor(r.r * 1.6));
+    for (let k = 0; k < n; k++) { const a = k / n * TAU; bx.fillRect(Math.round(r.x + Math.cos(a) * r.r - L), Math.round(r.y + Math.sin(a) * r.r - T), 1, 1); }
+  }
+  bx.globalAlpha = 1; bx.fillStyle = '#fff27a';
+  for (const z of G.zaps) {
+    let x = z.x, y = z.y, a = z.a;
+    for (let s = 0; s < z.len; s += 2) { a += rand(-0.9, 0.9); x += Math.cos(a) * 2; y += Math.sin(a) * 2; bx.fillRect(Math.round(x - L), Math.round(y - T), 1, 1); }
+  }
+  for (const [c, cx, cy] of vis) bx.drawImage(c.over, cx * CH - L, cy * CH - T);
+  // faint ghost of everything under pads and canopy, so nothing important hides completely
+  for (const f of vf) if (f.tier >= 2) drawRot(SPR[f.sp.id].frames[Math.floor(f.frame)], f.x, f.y, f.a, f.g, 0.22);
+  drawDots(L, T, 0.42);
+  // red skulls over fish that are too big to eat
+  if (G.mode === 'play') for (const f of vf) {
+    if (G.level >= f.T.eat || f.calm) continue;
+    const dd = Math.hypot(f.x - S.x, f.y - S.y); if (dd > 230) continue;
+    const sx = Math.round(f.x - L) - 2, sy = Math.round(f.y - T - f.g.W - 10 + Math.sin(G.time * 5 + f.x) * 1);
+    const hot = f.state === 'alert' || f.state === 'charge';
+    for (let pass = 0; pass < 2; pass++) {
+      bx.fillStyle = pass === 0 ? '#000' : hot ? (Math.sin(G.time * 20) > 0 ? '#ff2a22' : '#ffd0c0') : '#ff3b30';
+      bx.globalAlpha = pass === 0 ? 0.7 : clamp(1.4 - dd / 230, 0.35, 1);
+      for (let yy = 0; yy < 5; yy++) for (let xx = 0; xx < 5; xx++) if (SKULL[yy][xx] === '#') {
+        if (pass === 0) bx.fillRect(sx + xx - 1, sy + yy - 1, 3, 3); else bx.fillRect(sx + xx, sy + yy, 1, 1);
+      }
+    }
+  }
+  bx.globalAlpha = 1;
+  ctx.globalAlpha = 1; ctx.drawImage(buf, 0, 0, viewW * SCALE, viewH * SCALE);
+  // crisp text on the full-resolution canvas
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  for (const tx of G.texts) {
+    const k = tx.life / tx.max, px = Math.round(7 * SCALE * tx.size * (k > 0.85 ? 1 + (k - 0.85) * 3 : 1));
+    ctx.font = `700 ${px}px Silkscreen, 'Courier New', monospace`; ctx.globalAlpha = clamp(k * 2, 0, 1);
+    const sx = (tx.x - L) * SCALE, sy = (tx.y - T - (1 - k) * 16) * SCALE;
+    ctx.lineWidth = Math.max(3, SCALE * 1.2); ctx.strokeStyle = '#000'; ctx.strokeText(tx.txt, sx, sy); ctx.fillStyle = tx.col; ctx.fillText(tx.txt, sx, sy);
+  }
+  for (const f of vf) if (f.alert > 0) {
+    const px = Math.round(13 * SCALE), sx = (f.x - L) * SCALE, sy = (f.y - T - f.g.W - 22 - Math.abs(Math.sin(G.time * 12)) * 3) * SCALE;
+    ctx.globalAlpha = Math.min(1, f.alert * 3); ctx.font = `${px}px Bungee, Impact, sans-serif`;
+    ctx.lineWidth = SCALE * 1.6; ctx.strokeStyle = '#000'; ctx.strokeText('!', sx, sy); ctx.fillStyle = '#ff3b30'; ctx.fillText('!', sx, sy);
+  }
+  if (!boss.dead && (boss.state === 'coil') && boss.vis > 0.6) {
+    const h = boss.segs[0], px = Math.round(13 * SCALE);
+    ctx.globalAlpha = 1; ctx.font = `${px}px Bungee, Impact, sans-serif`; ctx.lineWidth = SCALE * 1.6; ctx.strokeStyle = '#000';
+    ctx.strokeText('!', (h.x - L) * SCALE, (h.y - T - 20) * SCALE); ctx.fillStyle = '#d9f07a'; ctx.fillText('!', (h.x - L) * SCALE, (h.y - T - 20) * SCALE);
+  }
+  ctx.globalAlpha = 1;
+  cam.left = camL; cam.top = camT;
+}
+function drawBoss(L, T) {
+  const n = boss.n;
+  if (boss.dead) {
+    const a = clamp(1 - (boss.deathT - 8) / 4, 0, 1); if (a <= 0) return;
+    bx.globalAlpha = a;
+    for (let i = n - 1; i >= 0; i -= 1) {
+      const s = boss.segs[i], r = Math.max(1, Math.round(segR(i) * 0.35)), dsc = DISCS.bone[r];
+      bx.drawImage(dsc, Math.round(s.x - L - dsc.width / 2), Math.round(s.y - T - dsc.height / 2));
+      if (i % 2 === 0 && i > 2 && i < n - 4) {
+        const p = boss.segs[i - 1], ang = Math.atan2(s.y - p.y, s.x - p.x) + Math.PI / 2, rl = segR(i) * 0.9;
+        bx.fillStyle = '#d8d0b4';
+        for (let k = -rl; k <= rl; k += 1) bx.fillRect(Math.round(s.x + Math.cos(ang) * k - L), Math.round(s.y + Math.sin(ang) * k - T), 1, 1);
+      }
+    }
+    bx.globalAlpha = 1; return;
+  }
+  const h = boss.segs[0];
+  if (h.x < L - 260 || h.x > L + viewW + 260 || h.y < T - 260 || h.y > T + viewH + 260) return;
+  const flash = boss.hurt > 0 && Math.sin(G.time * 50) > 0;
+  bx.globalAlpha = boss.vis * 0.3;
+  for (let i = n - 1; i >= 0; i--) { const s = boss.segs[i], r = Math.round(segR(i)), dsc = DISCS.spot[r]; bx.drawImage(dsc, Math.round(s.x - L - dsc.width / 2) + 3, Math.round(s.y - T - dsc.height / 2) + 4); }
+  bx.globalAlpha = boss.vis;
+  for (let i = n - 1; i >= 0; i--) {
+    const s = boss.segs[i], r = Math.round(segR(i)), dsc = (flash && i % 2 === 0) ? DISCS.hurt[r] : DISCS.snake[r];
+    bx.drawImage(dsc, Math.round(s.x - L - dsc.width / 2), Math.round(s.y - T - dsc.height / 2));
+    if (i > 2 && i % 3 === 0) {
+      const p = boss.segs[i - 1], ang = Math.atan2(s.y - p.y, s.x - p.x) + Math.PI / 2, side = (i % 6 === 0) ? 1 : -1;
+      const sr = Math.max(1, Math.round(r * 0.42)), sd = DISCS.spot[sr], ox = Math.cos(ang) * r * 0.42 * side, oy = Math.sin(ang) * r * 0.42 * side;
+      bx.drawImage(sd, Math.round(s.x + ox - L - sd.width / 2), Math.round(s.y + oy - T - sd.height / 2));
+    }
+  }
+  const ca = Math.cos(boss.a), sa = Math.sin(boss.a);
+  const hd = DISCS.snake[5]; bx.drawImage(hd, Math.round(h.x + ca * 3 - L - hd.width / 2), Math.round(h.y + sa * 3 - T - hd.height / 2));
+  bx.globalAlpha = Math.max(boss.vis, 0.75);
+  bx.fillStyle = '#f0d84a';
+  for (const sg of [-1, 1]) bx.fillRect(Math.round(h.x + ca * 3 - sa * 3 * sg - L), Math.round(h.y + sa * 3 + ca * 3 * sg - T), 1, 1);
+  if ((boss.state === 'stalk' || boss.state === 'coil') && Math.sin(G.time * 9) > 0.2) {
+    bx.fillStyle = '#d0302a';
+    for (let k = 7; k < 12; k++) bx.fillRect(Math.round(h.x + ca * k - L), Math.round(h.y + sa * k - T), 1, 1);
+    for (const sg of [-1, 1]) bx.fillRect(Math.round(h.x + ca * 12 - sa * sg - L), Math.round(h.y + sa * 12 + ca * sg - T), 1, 1);
+  }
+  bx.globalAlpha = 1;
+}
+/* ================= audio (synthesised, no files) ================= */
+const sfx = (() => {
+  let ac = null, master = null, nb = null, on = true;
+  function unlock() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+    master = ac.createGain(); master.gain.value = on ? 0.5 : 0; master.connect(ac.destination);
+    nb = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const ch = nb.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    // river ambience: looping filtered noise
+    const src = ac.createBufferSource(); src.buffer = nb; src.loop = true;
+    const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380;
+    const g = ac.createGain(); g.gain.value = 0.05; src.connect(lp); lp.connect(g); g.connect(master); src.start();
+  }
+  function tone(type, f0, f1, dur, vol, delay = 0) {
+    if (!ac) return; const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol, type, f0, f1, q = 1, delay = 0) {
+    if (!ac) return; const t = ac.currentTime + delay, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = nb; f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.02);
+  }
+  const semi = n => 330 * Math.pow(2, n / 12);
+  return {
+    unlock,
+    chomp(t) { noise(0.05 + t * 0.03, 0.22 + t * 0.05, 'bandpass', 2200 - t * 220, 500, 1.4); tone('square', 240 - t * 22, 70, 0.06 + t * 0.02, 0.05); if (t >= 3) noise(0.25, 0.2, 'lowpass', 900, 120, 0.8, 0.04); },
+    hit(t) { tone('sine', 150, 38, 0.28, 0.55); noise(0.2, 0.32, 'lowpass', 1400, 180, 0.7); if (t >= 5) tone('sawtooth', 90, 30, 0.35, 0.12); },
+    miss() { noise(0.16, 0.12, 'highpass', 2500, 6000, 0.7); },
+    alert() { tone('square', 880, 880, 0.05, 0.06); tone('square', 1320, 1320, 0.07, 0.06, 0.07); },
+    scatter() { noise(0.38, 0.28, 'bandpass', 380, 3200, 1.6); },
+    levelUp(L) { [0, 4, 7, 12, 16].forEach((n, i) => tone('square', semi(n + L), semi(n + L), 0.11, 0.07, i * 0.065)); tone('triangle', semi(L - 12), semi(L - 12), 0.5, 0.15, 0.3); },
+    levelDown() { [7, 3, 0, -5].forEach((n, i) => tone('square', semi(n), semi(n), 0.12, 0.06, i * 0.09)); },
+    hiss() { noise(0.8, 0.16, 'highpass', 3500, 5000, 0.4); },
+    bird() { if (Math.random() < 0.5) { const f = rand(1800, 2600); tone('sine', f, f * 1.5, 0.09, 0.025); tone('sine', f * 1.1, f * 1.6, 0.08, 0.02, 0.13); } else tone('sine', rand(600, 900), rand(300, 450), 0.25, 0.02); },
+    dead() { tone('sawtooth', 220, 40, 1.2, 0.18); noise(1, 0.2, 'lowpass', 800, 80, 0.7); },
+    win() { [0, 4, 7, 12, 7, 12, 16, 19, 24].forEach((n, i) => tone('square', semi(n), semi(n), 0.16, 0.08, i * 0.11)); },
+    toggle() { on = !on; if (master) master.gain.value = on ? 0.5 : 0; return on; },
+  };
+})();
+
+/* ================= HUD ================= */
+const $ = id => document.getElementById(id);
+const el = { hud: $('hud'), meter: $('meter'), lvNum: $('lvNum'), lvName: $('lvName'), massTxt: $('massTxt'), fill: $('barFill'), ghost: $('barGhost'),
+  shine: document.querySelector('.bar-shine'), bar: document.querySelector('#meter .bar'), boss: $('boss'), bossFill: $('bossFill'), scatter: $('btnScatter'),
+  hint: $('hint'), banner: $('banner'), bSub: $('bannerSub'), bMain: $('bannerMain'), vig: $('vignette'), mini: $('mini'), mapWrap: $('mapWrap') };
+const hud = { lv: 1, p: 0, ghost: 0, txt: '', cd: -1, boss: -1 };
+const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function setLevelVisuals(L) {
+  el.meter.style.setProperty('--lvl', LEVEL_COLORS[L - 1]);
+  el.lvNum.textContent = L; el.lvName.textContent = LEVELS[L - 1].name;
+  el.meter.classList.toggle('max', L === MAX_LEVEL);
+}
+function banner(sub, main, color, dur = 2300) {
+  el.bSub.textContent = sub; el.bMain.textContent = main; el.banner.style.setProperty('--bc', color);
+  el.banner.getAnimations().forEach(a => a.cancel());
+  el.banner.animate(reduceMotion ? [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }] : [
+    { opacity: 0, transform: 'scale(2.6)', filter: 'blur(8px)' },
+    { opacity: 1, transform: 'scale(.9)', filter: 'blur(0)', offset: 0.14 },
+    { opacity: 1, transform: 'scale(1.04)', offset: 0.22 },
+    { opacity: 1, transform: 'scale(1)', offset: 0.3 },
+    { opacity: 1, transform: 'scale(1)', offset: 0.8 },
+    { opacity: 0, transform: 'translateY(-36px) scale(.96)' }], { duration: dur, easing: 'cubic-bezier(.2,.8,.3,1)' });
+}
+function levelUpFX(L) {
+  const col = LEVEL_COLORS[L - 1];
+  setLevelVisuals(L);
+  el.shine.animate([{ left: '-45%', opacity: 1 }, { left: '110%', opacity: 1 }], { duration: 450, easing: 'ease-out' });
+  el.fill.animate([{ filter: 'brightness(3)' }, { filter: 'brightness(1)' }], { duration: 500 });
+  if (!reduceMotion) {
+    el.meter.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.09) rotate(-1deg)' }, { transform: 'scale(.98)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'ease-out' });
+    el.lvNum.animate([{ transform: 'scale(2.2)', color: '#fff' }, { transform: 'scale(1)' }], { duration: 500, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+    const br = el.bar.getBoundingClientRect(), mr = el.meter.getBoundingClientRect();
+    for (let i = 0; i < 18; i++) {
+      const s = document.createElement('span'); s.className = 'spark'; s.style.background = i % 3 ? col : '#fff';
+      s.style.left = (br.left - mr.left + Math.random() * br.width) + 'px'; s.style.top = (br.top - mr.top + br.height / 2) + 'px';
+      el.meter.appendChild(s);
+      const a = rand(-Math.PI, 0) + rand(-0.4, 0.4), d = rand(30, 90);
+      s.animate([{ transform: 'translate(0,0) scale(1)', opacity: 1 }, { transform: `translate(${Math.cos(a) * d}px,${Math.sin(a) * d + 40}px) scale(.3)`, opacity: 0 }],
+        { duration: rand(500, 900), easing: 'cubic-bezier(.2,.7,.4,1)' }).onfinish = () => s.remove();
+    }
+  }
+  banner('LEVEL ' + L, LEVELS[L - 1].name, col, L === MAX_LEVEL ? 3200 : 2300);
+  G.rings.push({ x: S.x, y: S.y, r: swarmR(), vr: 170, life: 0.7, max: 0.7, c: col });
+  G.rings.push({ x: S.x, y: S.y, r: swarmR() * 0.5, vr: 110, life: 0.6, max: 0.6, c: '#ffffff' });
+  for (const d of S.dots) { const ex = d.x - S.x, ey = d.y - S.y, l = Math.hypot(ex, ey) || 1; d.vx += ex / l * 60; d.vy += ey / l * 60; }
+  G.shake = Math.max(G.shake, 6); sfx.levelUp(L);
+}
+function levelDownFX(L) {
+  setLevelVisuals(L);
+  el.fill.animate([{ filter: 'brightness(.3) sepia(1) hue-rotate(-50deg) saturate(6)' }, { filter: 'none' }], { duration: 600 });
+  if (!reduceMotion) el.meter.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-8px)' }, { transform: 'translateX(7px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(0)' }], { duration: 380 });
+  banner('MASS LOST · LEVEL ' + L, LEVELS[L - 1].name, '#ff6a50', 1800); sfx.levelDown();
+}
+function flashHurt(k) { el.vig.animate([{ opacity: k }, { opacity: 0 }], { duration: 480, easing: 'ease-out' }); }
+let hintTimer = 0;
+function showHint(text, sec) {
+  el.hint.textContent = text; el.hint.classList.add('on');
+  clearTimeout(hintTimer); hintTimer = setTimeout(() => el.hint.classList.remove('on'), sec * 1000);
+}
+function updateHud(dt) {
+  const L = G.level, m = S.dots.length;
+  const p = L >= MAX_LEVEL ? 1 : clamp((m - LEVELS[L - 1].need) / (LEVELS[L].need - LEVELS[L - 1].need), 0, 1);
+  if (hud.lv < L) {
+    hud.p = Math.min(1, hud.p + dt * 2.6); hud.ghost = 1;
+    if (hud.p >= 1) { hud.lv++; levelUpFX(hud.lv); hud.p = 0; hud.ghost = 0; }
+  } else if (hud.lv > L) {
+    hud.lv = L; hud.p = 1; hud.ghost = 1; levelDownFX(L);
+  } else if (p >= hud.p) {
+    hud.ghost = p; hud.p = Math.min(p, hud.p + (p - hud.p) * Math.min(1, dt * 4) + dt * 0.04);
+    el.ghost.classList.remove('loss');
+  } else {
+    if (hud.ghost < hud.p) hud.ghost = hud.p;
+    hud.p = p; el.ghost.classList.add('loss');
+  }
+  if (el.ghost.classList.contains('loss')) hud.ghost += (hud.p - hud.ghost) * Math.min(1, dt * 2.2);
+  el.fill.style.transform = `scaleX(${hud.p.toFixed(4)})`;
+  el.ghost.style.transform = `scaleX(${clamp(hud.ghost, 0, 1).toFixed(4)})`;
+  const txt = L >= MAX_LEVEL ? `<b>${m}</b> MAX` : `<b>${m}</b> / ${LEVELS[L].need}`;
+  if (txt !== hud.txt) { hud.txt = txt; el.massTxt.innerHTML = txt; }
+  const cd = Math.round(S.dispCd / DISP_CD * 100) / 100;
+  if (cd !== hud.cd) { hud.cd = cd; el.scatter.style.setProperty('--cd', cd); el.scatter.classList.toggle('ready', cd <= 0); }
+  const bh = boss.engaged && !boss.dead ? Math.round(boss.hp / boss.max * 200) / 200 : -1;
+  if (bh !== hud.boss) { hud.boss = bh; el.boss.hidden = bh < 0; if (bh >= 0) el.bossFill.style.transform = `scaleX(${bh})`; }
+}
+const mctx = el.mini.getContext('2d');
+function drawMinimap() {
+  const N = 232; mctx.imageSmoothingEnabled = false; mctx.drawImage(miniBase, 0, 0);
+  const k = N / WORLD, pulse = 0.5 + 0.5 * Math.sin(G.time * 4);
+  mctx.strokeStyle = boss.dead ? 'rgba(239,230,207,.8)' : `rgba(255,${60 + pulse * 60},40,${0.6 + pulse * 0.4})`; mctx.lineWidth = 3;
+  mctx.beginPath(); mctx.arc(CENTER.x * k, CENTER.y * k, (LAGOON_R + 10) * k, 0, TAU); mctx.stroke();
+  mctx.fillStyle = '#ff3b30';
+  for (let yy = 0; yy < 5; yy++) for (let xx = 0; xx < 5; xx++) if (SKULL[yy][xx] === '#' && !boss.dead) mctx.fillRect(Math.round(CENTER.x * k) - 5 + xx * 2, Math.round(CENTER.y * k) - 5 + yy * 2, 2, 2);
+  const px = S.x * k, py = S.y * k;
+  mctx.fillStyle = '#000'; mctx.fillRect(px - 4, py - 4, 8, 8);
+  mctx.fillStyle = LEVEL_COLORS[G.level - 1]; mctx.fillRect(px - 3, py - 3, 6, 6);
+  mctx.strokeStyle = 'rgba(239,230,207,.55)'; mctx.lineWidth = 1.5;
+  mctx.strokeRect((cam.x - viewW / 2) * k, (cam.y - viewH / 2) * k, viewW * k, viewH * k);
+}
+
+/* ================= screens ================= */
+const screens = { start: $('screenStart'), pause: $('screenPause'), end: $('screenEnd') };
+function buildGuide() {
+  const g = $('guide'); g.innerHTML = '';
+  const lvl = G.mode === 'title' ? 1 : G.level;
+  for (let t = 1; t <= 6; t++) {
+    const h = document.createElement('div'); h.className = 'tier-h';
+    h.textContent = t === 1 ? 'TIER 1 · ALWAYS EDIBLE' : `TIER ${t} · EAT AT LV ${TIERS[t].eat} · BITES ${t}× IF YOU ARE SMALLER`;
+    g.appendChild(h);
+    for (const sp of SPECIES_BY_TIER[t]) {
+      const c = document.createElement('div'); c.className = 'gcard';
+      const cvs = document.createElement('canvas'); cvs.width = 58; cvs.height = 34;
+      const x = cvs.getContext('2d'), s = SPR[sp.id], fr = s.frames[1], k = Math.min(54 / s.g.w, 30 / s.g.h, 4);
+      x.imageSmoothingEnabled = false;
+      x.drawImage(fr, Math.round(29 - s.g.w * k / 2), Math.round(17 - s.g.h * k / 2), Math.round(s.g.w * k), Math.round(s.g.h * k));
+      const info = document.createElement('div'), ok = lvl >= TIERS[t].eat;
+      info.innerHTML = `<div class="n"></div><div class="${ok ? 'ok' : 'bad'}">${ok ? 'EDIBLE' : 'DANGER · LV ' + TIERS[t].eat}</div><div class="b"></div>`;
+      info.querySelector('.n').textContent = sp.name; info.querySelector('.b').textContent = sp.blurb;
+      c.appendChild(cvs); c.appendChild(info); g.appendChild(c);
+    }
+  }
+  const h = document.createElement('div'); h.className = 'tier-h'; h.textContent = 'THE LAGOON · LV 10 ONLY'; g.appendChild(h);
+  const c = document.createElement('div'); c.className = 'gcard';
+  const cvs = document.createElement('canvas'); cvs.width = 58; cvs.height = 34; const x = cvs.getContext('2d');
+  for (let i = 22; i >= 0; i--) { const r = Math.max(1, Math.round(segR(i * 2) * 0.5)), dsc = DISCS.snake[r]; x.drawImage(dsc, Math.round(52 - i * 2.1 - dsc.width / 2), Math.round(17 + Math.sin(i * 0.5) * 6 - dsc.height / 2)); }
+  c.appendChild(cvs);
+  const info = document.createElement('div'); info.innerHTML = '<div class="n">Green Anaconda</div><div class="bad">BOSS · LV 10</div><div>Hides in the central lagoon. Strikes again and again.</div>';
+  c.appendChild(info); g.appendChild(c);
+}
+function showScreen(name) { for (const k in screens) screens[k].hidden = k !== name; }
+function startGame() {
+  showScreen(null); el.hud.hidden = false; G.mode = 'play'; sfx.unlock();
+  hud.lv = G.level; hud.p = 0; hud.ghost = 0; setLevelVisuals(G.level);
+  showHint('Hold anywhere and the swarm swims toward your thumb. Eat the small fish.', 5);
+}
+function newRiver() { resetGame((Math.random() * 1e9) | 0); hud.lv = 1; hud.p = 0; setLevelVisuals(1); }
+function pauseGame(guideOnly) {
+  if (G.mode === 'play') G.mode = 'pause';
+  buildGuide();
+  $('pauseTitle').textContent = guideOnly ? 'FIELD GUIDE' : 'PAUSED';
+  $('btnResume').textContent = guideOnly ? 'BACK' : 'RESUME';
+  $('btnRestart').hidden = !!guideOnly;
+  showScreen('pause');
+}
+function resumeGame() {
+  if (G.mode === 'pause') { G.mode = 'play'; showScreen(null); }
+  else showScreen('start');
+}
+function endGame(win) {
+  G.mode = 'end'; input.down = false;
+  $('endTitle').textContent = win ? 'APEX OF THE AMAZON' : 'THE SWARM IS GONE';
+  $('endTitle').style.color = win ? '#ff3b30' : '';
+  const peak = LEVELS[G.stats.peak - 1].name;
+  $('endText').textContent = win ? `The anaconda is bones. A swarm of ${S.dots.length} piranhas rules the river.`
+    : `${G.lastBiter ? 'A ' + G.lastBiter + ' finished off' : 'Something finished off'} your swarm. At its peak it was ${peak}.`;
+  const tm = Math.floor(G.stats.time), mmss = `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, '0')}`;
+  $('endStats').innerHTML = `<div class="stat"><b>${G.stats.eaten}</b><span>FISH EATEN</span></div><div class="stat"><b>${G.stats.peak}</b><span>PEAK LEVEL</span></div><div class="stat"><b>${mmss}</b><span>TIME</span></div>`;
+  $('btnContinue').hidden = !win;
+  showScreen('end');
+}
+
+/* ================= input ================= */
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); sfx.unlock();
+  if (G.mode !== 'play') return;
+  if (el.mapWrap.classList.contains('big')) { el.mapWrap.classList.remove('big'); return; }
+  if (input.down && e.pointerId !== input.id) { triggerScatter(); return; }
+  const now = performance.now(), dbl = now - input.lastTap < 320 && Math.hypot(e.clientX - input.lx, e.clientY - input.ly) < 70;
+  input.lastTap = dbl ? 0 : now; input.lx = e.clientX; input.ly = e.clientY;
+  input.down = true; input.id = e.pointerId; input.x = e.clientX; input.y = e.clientY;
+  try { cv.setPointerCapture(e.pointerId); } catch (_) { }
+  if (dbl) triggerScatter();
+});
+cv.addEventListener('pointermove', e => { if (input.down && e.pointerId === input.id) { input.x = e.clientX; input.y = e.clientY; } });
+const up = e => { if (e.pointerId === input.id) { input.down = false; input.id = null; } };
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('keydown', e => {
+  if (e.repeat) { if (e.code.startsWith('Arrow')) e.preventDefault(); return; }
+  input.keys[e.code] = true;
+  if (e.code === 'Space') { e.preventDefault(); sfx.unlock(); triggerScatter(); }
+  if (e.code.startsWith('Arrow')) e.preventDefault();
+  if (e.code === 'KeyP' || e.code === 'Escape') { if (G.mode === 'play') pauseGame(false); else if (G.mode === 'pause') resumeGame(); }
+});
+window.addEventListener('keyup', e => { input.keys[e.code] = false; });
+window.addEventListener('blur', () => { input.keys = {}; input.down = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden && G.mode === 'play') pauseGame(false); });
+el.scatter.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); sfx.unlock(); triggerScatter(); });
+el.mini.addEventListener('click', () => el.mapWrap.classList.toggle('big'));
+$('btnPause').addEventListener('click', () => { if (G.mode === 'play') pauseGame(false); });
+$('btnSound').addEventListener('click', () => { sfx.unlock(); $('btnSound').classList.toggle('off', !sfx.toggle()); });
+$('btnStart').addEventListener('click', startGame);
+$('btnGuide0').addEventListener('click', () => pauseGame(true));
+$('btnResume').addEventListener('click', resumeGame);
+$('btnRestart').addEventListener('click', () => { newRiver(); G.mode = 'play'; showScreen(null); startGame(); });
+$('btnAgain').addEventListener('click', () => { newRiver(); startGame(); });
+$('btnContinue').addEventListener('click', () => { G.mode = 'play'; showScreen(null); showHint('The river is yours. Keep feeding.', 3); });
+window.addEventListener('resize', resize);
+
+/* ================= main loop ================= */
+let last = performance.now(), frameN = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (G.mode === 'pause') return;
+  chunkTick++; frameN++;
+  if (dt > 1 / 40) { step(dt / 2); step(dt / 2); } else step(dt);
+  render();
+  if (G.mode !== 'title') { updateHud(dt); if (frameN % 4 === 0) drawMinimap(); }
+}
+function snapshot() {
+  return { seed: SEED, mode: G.mode === 'title' ? 'title' : 'play', mass: S.dots.length, x: S.x, y: S.y, stats: G.stats, bossHp: boss.hp, bossDead: boss.dead, hints: G.hints };
+}
+function boot(data) {
+  data = data || {};
+  buildSprites(); buildDiscs(); resize();
+  resetGame(data.seed || ((Math.random() * 1e9) | 0));
+  if (data.mode === 'play' && data.mass >= DEAD_MASS) {
+    if (depthAt(data.x, data.y) > 2) { S.x = data.x; S.y = data.y; cam.x = S.x; cam.y = S.y; }
+    S.dots = []; addDots(data.mass, S.x, S.y);
+    G.stats = data.stats || newStats(); G.hints = data.hints || {}; G.level = levelFor(S.dots.length);
+    boss.hp = data.bossHp || boss.max; if (data.bossDead) { boss.dead = true; boss.deathT = 99; }
+    startGame();
+  }
+  $('loading').hidden = true;
+  try { window.claude?.hot?.snapshot?.(snapshot); } catch (_) { }
+  requestAnimationFrame(t => { last = t; loop(t); });
+}
+const hot = window.claude?.hot;
+if (hot?.ready) hot.ready(boot); else boot(hot?.data ?? {});
+</script>
+</body>
+</html>
