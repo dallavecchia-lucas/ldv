@@ -61,14 +61,6 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 @keyframes redText{from{color:#ff4a3a;}to{color:#b3140e;}}
 @keyframes panelGlow{from{box-shadow:inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 0 0 18px rgba(255,40,30,.75);}
   to{box-shadow:inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 0 0 4px rgba(255,40,30,.2);}}
-.hunger{display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.12em;line-height:1;}
-#hungerLbl{width:64px;flex:none;font-weight:700;color:var(--moss);}
-.hbar{flex:1;min-width:0;height:6px;position:relative;background:#050a08;box-shadow:inset 1px 1px 0 rgba(0,0,0,.7), inset -1px -1px 0 #2c4234;}
-#hungerFill{position:absolute;inset:1px;transform-origin:0 50%;background:var(--moss);}
-#hungerRate{flex:none;min-width:42px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;}
-.hunger.s1 #hungerLbl{color:var(--gold);} .hunger.s1 #hungerFill{background:var(--gold);}
-.hunger.s2 #hungerLbl,.hunger.s2 #hungerRate{color:var(--blood);animation:blink .5s steps(2) infinite;}
-@keyframes blink{50%{opacity:.3;}}
 .spark{position:absolute;width:5px;height:5px;background:var(--lvl);pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.5);}
 
 #boss{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(18px + var(--sab));width:min(420px, calc(100vw - 140px));
@@ -151,7 +143,7 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
   #btnScatter{width:78px;height:78px;}
 }
 @media (prefers-reduced-motion: reduce){
-  #meter.max #barFill,#meter.max,#btnScatter.ready,#meter.max #lvNum,#meter.max #lvName,.hunger.s2 #hungerLbl,.hunger.s2 #hungerRate{animation:none;}
+  #meter.max #barFill,#meter.max,#btnScatter.ready,#meter.max #lvNum,#meter.max #lvName{animation:none;}
 }
 </style>
 </head>
@@ -164,7 +156,6 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
     <div class="meter-main">
       <div class="meter-top"><span id="lvName">SPECK OF TEETH</span><span id="massTxt"><b>12</b> / 22</span></div>
       <div class="bar"><div id="barGhost"></div><div id="barFill"></div><div class="bar-ticks"></div><div class="bar-shine"></div></div>
-      <div class="hunger s0" id="hunger" hidden><span id="hungerLbl">FED</span><div class="hbar"><div id="hungerFill"></div></div><span id="hungerRate"></span></div>
     </div>
   </div>
   <div id="mapWrap">
@@ -903,8 +894,8 @@ const G = {
 };
 const S = { x: 0, y: 0, vx: 0, vy: 0, dots: [], dispT: 0, dispCd: 0, regroup: null, inv: 0, prey: null, alive: true, moving: false };
 const DISP_CD = 4, DISP_T = 1.05;
-// hunger: piranhas starved per second at each level, and seconds of fullness per fish tier eaten
-const HUNGER = [0.15, 0.3, 0.5, 0.8, 1.2, 1.7, 2.3, 3.0, 3.8, 4.8], SAT = [0, 1.0, 2.0, 3.0, 4.5, 6, 8], SAT_MAX = 10;
+// hunger: piranhas starved per second at each level, draining nonstop once it sets in
+const HUNGER = [0.12, 0.2, 0.3, 0.45, 0.65, 0.9, 1.2, 1.6, 2.1, 2.7];
 const swarmR = () => 2.2 + 1.45 * Math.sqrt(S.dots.length);
 const levelFor = m => { let l = 1; for (let i = 0; i < LEVELS.length; i++) if (m >= LEVELS[i].need) l = i + 1; return l; };
 
@@ -922,7 +913,7 @@ function resetGame(seed) {
   genWorld(seed); chunks.clear();
   G.fish = []; G.blood = []; G.rings = []; G.bones = []; G.texts = []; G.zaps = [];
   resetBlood();
-  G.hungerOn = false; G.sat = 0; G.hungerAcc = 0; G.lastLoss = null; S.slow = 1;
+  G.hungerOn = false; G.hungerAcc = 0; G.lastLoss = null; S.slow = 1;
   G.time = 0; G.spawnT = 0; G.shake = 0; G.won = false; G.stats = newStats(); G.hints = {}; G.lairWarnT = 0;
   S.x = startPos.x; S.y = startPos.y; S.vx = S.vy = 0; S.dots = []; S.dispT = 0; S.dispCd = 0; S.regroup = null; S.inv = 0; S.prey = null; S.alive = true;
   addDots(START_MASS, S.x, S.y);
@@ -991,10 +982,9 @@ function updateHunger(dt) {
   if (!S.alive) return;
   if (!G.hungerOn) {
     if (G.level < 2) return;
-    G.hungerOn = true; G.sat = SAT_MAX;
+    G.hungerOn = true;
     setTimeout(() => { if (G.mode === 'play') cinematic('HUNGER!', 'EAT TO SURVIVE!'); }, 2400);
   }
-  if (G.sat > 0) { G.sat = Math.max(0, G.sat - dt); return; }
   G.hungerAcc += HUNGER[G.level - 1] * dt;
   while (G.hungerAcc >= 1 && S.dots.length) {
     G.hungerAcc -= 1;
@@ -1142,7 +1132,6 @@ function eatFish(f) {
   G.rings.push({ x: f.x, y: f.y, r: f.g.W, vr: 30 + f.tier * 8, life: 0.6, max: 0.6, c: '#d8f0dc' });
   G.bones.push({ spr: SPR[f.sp.id].bones, g: f.g, x: f.x, y: f.y, a: f.a, life: 6, max: 6 });
   if (food > 0) floatText(f.x, f.y - f.g.W - 4, '+' + food, rel < 0.5 ? '#c9c2a0' : '#fff3a0', f.tier >= 4 ? 1.35 : rel < 0.5 ? 0.8 : 1);
-  G.sat = Math.min(SAT_MAX, G.sat + SAT[f.tier] * rel);
   G.stats.eaten++; G.stats.byTier[f.tier]++;
   if (!G.stats.biggest || f.tier >= G.stats.biggest.tier) G.stats.biggest = f.sp;
   G.shake = Math.max(G.shake, f.tier >= 3 ? f.tier * 0.8 : 0);
@@ -1259,9 +1248,8 @@ function updateBoss(dt) {
       touching = true;
       const dmg = Math.sqrt(S.dots.length) * 4.2 * 0.55 * dt;
       boss.hp -= dmg; boss.hurt = 0.2;
-      boss.feedAcc += dmg * 0.06;
+      boss.feedAcc += dmg * 0.08;
       if (boss.feedAcc >= 1) { addDots(Math.floor(boss.feedAcc), boss.segs[bi].x, boss.segs[bi].y); boss.feedAcc %= 1; }
-      G.sat = Math.min(SAT_MAX, G.sat + dt * 1.5);
       S.prey = { x: boss.segs[bi].x, y: boss.segs[bi].y, dead: false, g: { W: segR(bi), L: 8 }, boss: true };
       if (Math.random() < dt * 30) bleed(boss.segs[bi].x + rand(-4, 4), boss.segs[bi].y + rand(-4, 4), 2);
       addBlood(boss.segs[bi].x, boss.segs[bi].y, dt * 2.5, 14);
@@ -1274,7 +1262,7 @@ function updateBoss(dt) {
     boss.nextThrash -= boss.max * 0.16; boss.state = 'thrash'; boss.st = 1.3; boss.thrashA = Math.atan2(h.y - S.y, h.x - S.x); sfx.hiss();
     for (let i = boss.n - 16; i < boss.n; i += 3) {
       const s = boss.segs[i];
-      if (S.inv <= 0 && S.dispT <= 0 && Math.hypot(s.x - S.x, s.y - S.y) < R * 0.6 + 14) { tailWhip(s.x, s.y); break; }
+      if (S.inv <= 0 && S.dispT <= 0 && Math.hypot(s.x - S.x, s.y - S.y) < R * 0.8 + 18) { tailWhip(s.x, s.y); break; }
     }
   }
   // linger on the body and it wraps around the swarm
@@ -1311,7 +1299,7 @@ function updateBoss(dt) {
       break;
     case 'strike':
       speed = 275; desired = boss.strikeA; turn = 1.2; boss.st -= dt;
-      if (S.inv <= 0 && S.dispT <= 0 && dist < R * 0.65 + 6) { snakeBite(h.x, h.y); boss.state = 'recover'; boss.st = 1.0; }
+      if (S.inv <= 0 && S.dispT <= 0 && dist < R * 0.9 + 10) { snakeBite(h.x, h.y); boss.state = 'recover'; boss.st = 1.0; }
       else if (boss.st <= 0) { boss.state = 'recover'; boss.st = 0.8; }
       break;
     case 'recover':
@@ -1340,7 +1328,7 @@ function updateBoss(dt) {
       const inside = Math.hypot(S.x - boss.sqX, S.y - boss.sqY) < rr + 3;
       if (inside && S.dispT <= 0) {
         S.slow = 0.45;
-        boss.crushAcc += [0, 20, 26, 32][ph] * dt;
+        boss.crushAcc += [0, 30, 38, 48][ph] * dt;
         if (boss.crushAcc >= 1) {
           const n = Math.floor(boss.crushAcc); boss.crushAcc -= n;
           removeNearestDots(S.x + rand(-R, R) * 0.6, S.y + rand(-R, R) * 0.6, n); G.lastLoss = 'bite'; G.lastBiter = 'Green Anaconda';
@@ -1364,15 +1352,30 @@ function updateBoss(dt) {
     const p = boss.segs[i - 1], s = boss.segs[i], ex = s.x - p.x, ey = s.y - p.y, l = Math.hypot(ex, ey) || 1;
     if (l > boss.sp) { s.x = p.x + ex / l * boss.sp; s.y = p.y + ey / l * boss.sp; }
   }
+  // body slam: lunging or thrashing through the swarm crushes every piranha in the way
+  if (S.alive && S.dispT <= 0 && inLair && (boss.state === 'strike' || boss.state === 'thrash')) {
+    boss.slamAcc = (boss.slamAcc || 0) + 45 * dt;
+    let k = 0;
+    for (let i = 0; i < 14 && k < boss.slamAcc - 1; i += 2) {
+      const s = boss.segs[i], r = segR(i) + 2;
+      if (Math.abs(s.x - S.x) > R + r || Math.abs(s.y - S.y) > R + r) continue;
+      for (let j = S.dots.length - 1; j >= 0 && k < boss.slamAcc - 1; j--) {
+        const d = S.dots[j];
+        if (Math.abs(d.x - s.x) < r && Math.abs(d.y - s.y) < r) { bleed(d.x, d.y, 2); S.dots[j] = S.dots[S.dots.length - 1]; S.dots.pop(); k++; }
+      }
+    }
+    boss.slamAcc = Math.min(3, boss.slamAcc - k);
+    if (k) { G.lastLoss = 'bite'; G.lastBiter = 'Green Anaconda'; addBlood(h.x, h.y, 0.15 * k, 10); G.shake = Math.max(G.shake, 4); }
+  } else boss.slamAcc = 0;
 }
 function tailWhip(x, y) {
-  const killed = removeNearestDots(x, y, 24);
+  const killed = removeNearestDots(x, y, 32);
   S.inv = 0.4; G.lastLoss = 'bite'; G.lastBiter = 'Green Anaconda';
   bleed(x, y, 10 + killed, 6, 1.4); addBlood(x, y, 0.8, 16);
   floatText(x, y - 8, '-' + killed, '#ff5a4a', 1.3); G.shake = 9; flashHurt(0.8); sfx.hit(5); sfx.splat(0.5);
 }
 function snakeBite(x, y) {
-  const killed = removeNearestDots(x, y, boss.unlocked ? [0, 32, 38, 44][bossPhase()] : 70);
+  const killed = removeNearestDots(x, y, boss.unlocked ? [0, 40, 48, 58][bossPhase()] : 90);
   S.inv = 0.5; G.lastBiter = 'Green Anaconda'; G.lastLoss = 'bite';
   bleed(x, y, 14 + killed, 6, 1.5); addBlood(x, y, 1 + killed * 0.04, 18);
   floatText(x, y - 8, '-' + killed, '#ff5a4a', 1.5); G.shake = 12; flashHurt(1); sfx.hit(6); sfx.splat(0.6);
@@ -1529,7 +1532,8 @@ function step(dt) {
   G.zaps = G.zaps.filter(z => z.life > 0);
   // level
   if (G.mode === 'play') {
-    const lv = levelFor(S.dots.length);
+    let lv = levelFor(S.dots.length);
+    if (lv < G.level && S.dots.length >= LEVELS[G.level - 1].need - Math.max(2, Math.round(LEVELS[G.level - 1].need * 0.04))) lv = G.level;
     if (lv !== G.level) {
       G.level = lv; G.stats.peak = Math.max(G.stats.peak, lv);
     }
@@ -1817,8 +1821,8 @@ const sfx = (() => {
 const $ = id => document.getElementById(id);
 const el = { hud: $('hud'), meter: $('meter'), lvNum: $('lvNum'), lvName: $('lvName'), massTxt: $('massTxt'), fill: $('barFill'), ghost: $('barGhost'),
   shine: document.querySelector('.bar-shine'), bar: document.querySelector('#meter .bar'), boss: $('boss'), bossFill: $('bossFill'), scatter: $('btnScatter'),
-  cine: $('cine'), cineMain: $('cineMain'), cineSub: $('cineSub'), flash: $('flash'), hunger: $('hunger'), hungerLbl: $('hungerLbl'), hungerFill: $('hungerFill'), hungerRate: $('hungerRate'), bossName: $('bossName'), banner: $('banner'), bSub: $('bannerSub'), bMain: $('bannerMain'), vig: $('vignette'), mini: $('mini'), mapWrap: $('mapWrap') };
-const hud = { lv: 1, p: 0, ghost: 0, txt: '', cd: -1, boss: -1, hOn: null, hSt: -1, hRate: '', bph: 0 };
+  cine: $('cine'), cineMain: $('cineMain'), cineSub: $('cineSub'), flash: $('flash'), bossName: $('bossName'), banner: $('banner'), bSub: $('bannerSub'), bMain: $('bannerMain'), vig: $('vignette'), mini: $('mini'), mapWrap: $('mapWrap') };
+const hud = { lv: 1, best: 1, p: 0, ghost: 0, txt: '', cd: -1, boss: -1, hOn: null, hSt: -1, hRate: '', bph: 0 };
 const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 function setLevelVisuals(L) {
   el.meter.style.setProperty('--lvl', LEVEL_COLORS[L - 1]);
@@ -1841,6 +1845,8 @@ function levelUpFX(L) {
   setLevelVisuals(L);
   el.shine.animate([{ left: '-45%', opacity: 1 }, { left: '110%', opacity: 1 }], { duration: 450, easing: 'ease-out' });
   el.fill.animate([{ filter: 'brightness(3)' }, { filter: 'brightness(1)' }], { duration: 500 });
+  const first = L > hud.best; hud.best = Math.max(hud.best, L);
+  if (!first) { sfx.levelUp(L); return; }
   if (!reduceMotion) {
     el.meter.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.09) rotate(-1deg)' }, { transform: 'scale(.98)' }, { transform: 'scale(1)' }], { duration: 420, easing: 'ease-out' });
     el.lvNum.animate([{ transform: 'scale(2.2)', color: '#fff' }, { transform: 'scale(1)' }], { duration: 500, easing: 'cubic-bezier(.3,1.6,.5,1)' });
@@ -1901,7 +1907,8 @@ function cinematic(main, sub, dur = 2700) {
 }
 function updateHud(dt) {
   const L = G.level, m = S.dots.length;
-  const p = L >= MAX_LEVEL ? 1 : clamp((m - LEVELS[L - 1].need) / (LEVELS[L].need - LEVELS[L - 1].need), 0, 1);
+  // at max level the bar shows mass against the cap, so every loss still chips it
+  const p = L >= MAX_LEVEL ? clamp(m / MAX_MASS, 0, 1) : clamp((m - LEVELS[L - 1].need) / (LEVELS[L].need - LEVELS[L - 1].need), 0, 1);
   if (hud.lv < L) {
     hud.p = Math.min(1, hud.p + dt * 2.6); hud.ghost = 1;
     if (hud.p >= 1) { hud.lv++; levelUpFX(hud.lv); hud.p = 0; hud.ghost = 0; }
@@ -1926,14 +1933,6 @@ function updateHud(dt) {
   if (bh >= 0) {
     const ph = bossPhase();
     if (ph !== hud.bph) { hud.bph = ph; el.boss.style.setProperty('--bossc', ['', '#7aa832', '#e0a02a', '#e0302a'][ph]); el.bossName.textContent = ph === 3 ? 'GREEN ANACONDA · ENRAGED' : 'GREEN ANACONDA'; }
-  }
-  if (G.hungerOn !== hud.hOn) { hud.hOn = G.hungerOn; el.hunger.hidden = !G.hungerOn; }
-  if (G.hungerOn) {
-    const st = G.sat <= 0 ? 2 : G.sat < 2.5 ? 1 : 0;
-    if (st !== hud.hSt) { hud.hSt = st; el.hunger.className = 'hunger s' + st; el.hungerLbl.textContent = ['FED', 'HUNGRY', 'STARVING'][st]; }
-    el.hungerFill.style.transform = `scaleX(${(G.sat / SAT_MAX).toFixed(3)})`;
-    const rt = '−' + HUNGER[G.level - 1].toFixed(1) + '/s';
-    if (rt !== hud.hRate) { hud.hRate = rt; el.hungerRate.textContent = rt; }
   }
 }
 const mctx = el.mini.getContext('2d');
@@ -1996,10 +1995,10 @@ function buildGuide() {
 function showScreen(name) { for (const k in screens) screens[k].hidden = k !== name; }
 function startGame(quiet) {
   showScreen(null); el.hud.hidden = false; G.mode = 'play'; sfx.unlock();
-  hud.lv = G.level; hud.p = 0; hud.ghost = 0; setLevelVisuals(G.level);
+  hud.lv = G.level; hud.best = Math.max(G.level, G.stats.peak || 1); hud.p = 0; hud.ghost = 0; setLevelVisuals(G.level);
   if (!quiet) setTimeout(() => { if (G.mode === 'play') cinematic('USE YOUR THUMBS', 'TO MOVE THE PIRANHAS'); }, 350);
 }
-function newRiver() { resetGame((Math.random() * 1e9) | 0); hud.lv = 1; hud.p = 0; setLevelVisuals(1); }
+function newRiver() { resetGame((Math.random() * 1e9) | 0); hud.lv = 1; hud.best = 1; hud.p = 0; setLevelVisuals(1); }
 function pauseGame(guideOnly) {
   if (G.mode === 'play') G.mode = 'pause';
   buildGuide();
@@ -2076,7 +2075,7 @@ function loop(now) {
   if (G.mode !== 'title') { updateHud(dt); if (frameN % 4 === 0) drawMinimap(); }
 }
 function snapshot() {
-  return { seed: SEED, mode: G.mode === 'title' ? 'title' : 'play', mass: S.dots.length, x: S.x, y: S.y, stats: G.stats, bossHp: boss.hp, bossDead: boss.dead, hints: G.hints, hungerOn: G.hungerOn, sat: G.sat };
+  return { seed: SEED, mode: G.mode === 'title' ? 'title' : 'play', mass: S.dots.length, x: S.x, y: S.y, stats: G.stats, bossHp: boss.hp, bossDead: boss.dead, hints: G.hints, hungerOn: G.hungerOn };
 }
 function boot(data) {
   data = data || {};
@@ -2086,7 +2085,7 @@ function boot(data) {
     if (depthAt(data.x, data.y) > 2) { S.x = data.x; S.y = data.y; cam.x = S.x; cam.y = S.y; }
     S.dots = []; addDots(data.mass, S.x, S.y);
     G.stats = data.stats || newStats(); G.hints = data.hints || {}; G.level = levelFor(S.dots.length);
-    G.hungerOn = !!data.hungerOn; G.sat = data.sat ?? SAT_MAX;
+    G.hungerOn = !!data.hungerOn;
     boss.hp = data.bossHp || boss.max; if (data.bossDead) { boss.dead = true; boss.deathT = 99; }
     startGame(true);
   }
