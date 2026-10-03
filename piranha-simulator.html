@@ -185,7 +185,7 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
     <ul class="rows">
       <li><b>HOLD &amp; DRAG</b><span>The swarm swims toward your thumb.</span></li>
       <li><b>DOUBLE-TAP</b><span>Scatter so attackers lose track of you, then regroup where your thumb is. Short cooldown.</span></li>
-      <li><b>RED SKULL</b><span>Too big to eat. It bites once per tier, then swims off. If it is far bigger than you, it hunts you to death.</span></li>
+      <li><b>RED SKULL</b><span>Too big to eat. It bites once per tier, then swims off. “!!” means its bites are enough to kill you. Outswim any hunter and it tires and gives up.</span></li>
       <li><b>HUNGER</b><span>From LV 2 the swarm starves unless it keeps eating. The bigger it is, the faster it starves.</span></li>
       <li><b>KEYBOARD</b><span>WASD or arrows to swim, Space to scatter, P to pause.</span></li>
     </ul>
@@ -930,7 +930,7 @@ function spawnFish(sp, x, y, o = {}) {
   const T = TIERS[sp.tier], g = SPR[sp.id].g;
   const f = { sp, T, tier: sp.tier, g, x, y, a: Math.random() * TAU, v: T.cruise, hp: T.hp, state: 'wander', st: 0, attacks: sp.tier,
     turn: 0, turnT: 0, frame: Math.random() * NFR, guard: !!o.guard, home: o.guard ? { x, y } : (o.home || null), leash: o.leash || 110, calm: false, leader: o.leader || null,
-    ox: o.ox || 0, oy: o.oy || 0, need: Math.min(g.W + 3, 12), alert: 0, patience: 14, seen: false, dead: false };
+    ox: o.ox || 0, oy: o.oy || 0, need: Math.min(g.W + 3, 12), alert: 0, stamina: 0, seen: false, dead: false };
   G.fish.push(f); return f;
 }
 function zoneMaxTier(x, y) {
@@ -1043,47 +1043,56 @@ function updateFish(f, dt) {
       speed = T.flee * (f.fleeT > 1.8 ? 0.72 : 1);
     } else { f.state = 'wander'; f.fleeT = Math.max(0, (f.fleeT || 0) - dt * 0.5); }
   } else {
-    // too big to eat: aggressive
-    const aggroR = (f.guard ? 70 : 46) + f.tier * 12;
+    // too big to eat: it bites once per tier, then leaves. It hunts to death only when
+    // those bites are enough to finish the swarm, and any hunter tires out if outswum.
+    const aggroR = (f.guard ? 70 : 46) + f.tier * 12, giveUpR = aggroR * 2.3;
+    const strain = clamp((dist - aggroR * 0.5) / aggroR, 0, 1.6);
+    const tire = () => { f.state = 'tired'; f.st = rand(6, 9); f.lethal = false; floatText(f.x, f.y - f.g.W - 6, 'GAVE UP', '#c9d6cf', 0.8); };
     switch (f.state) {
       case 'wander': case 'flee': case 'caught':
         f.state = 'wander';
-        if (!f.calm && S.alive && (f.attacks > 0 || isRelentless(f)) && dist < aggroR && G.mode === 'play') {
+        if (!f.calm && S.alive && f.attacks > 0 && dist < aggroR && G.mode === 'play') {
           f.state = 'alert'; f.st = f.seen ? 0.38 : 0.62; f.seen = true; f.alert = 0.9; sfx.alert(f.tier);
-          f.relentless = isRelentless(f); f.dmg = biteDamage(f);
-          if (!G.hints.scatter) { G.hints.scatter = 1; showHint('A big fish is coming for you. Double-tap to scatter and it loses track of you.', 4); }
+          f.dmg = biteDamage(f); f.lethal = isLethal(f); f.stamina = f.lethal ? 9 : 5.5;
+          if (!G.hints.scatter) { G.hints.scatter = 1; showHint('A big fish is coming for you. Double-tap to scatter, or outswim it until it tires.', 4); }
         }
         break;
       case 'alert':
-        speed = 4; desired = Math.atan2(dy, dx); turnRate = T.turn * 1.4; f.st -= dt;
-        if (f.st <= 0) { f.state = 'charge'; f.st = 3.2; }
+        speed = 4; desired = Math.atan2(dy, dx); turnRate = T.turn * 1.4; f.st -= dt; f.stamina -= dt * strain;
+        if (f.st <= 0) { f.state = 'charge'; f.st = 0; }
         break;
       case 'charge': {
+        f.st += dt; f.stamina -= dt * strain;
         const px = S.x + S.vx * 0.25, py = S.y + S.vy * 0.25;
-        desired = Math.atan2(py - f.y, px - f.x); speed = T.charge; turnRate = T.turn * 0.9;
+        // a sprint that fades: keep swimming away and the fish falls behind
+        desired = Math.atan2(py - f.y, px - f.x); speed = T.charge * (1 - 0.42 * clamp(f.st / 2.2, 0, 1)); turnRate = T.turn * 0.9;
         const hx = f.x + Math.cos(f.a) * f.g.L * 0.42, hy = f.y + Math.sin(f.a) * f.g.L * 0.42;
         if (S.inv <= 0 && S.dispT <= 0 && Math.hypot(hx - S.x, hy - S.y) < R * 0.6 + 3) {
-          biteSwarm(f, hx, hy); f.attacks--; f.state = 'retreat'; f.st = f.relentless ? rand(0.6, 0.9) : rand(1.0, 1.4);
-        } else { f.st -= dt; if (f.st <= 0) { f.state = 'retreat'; f.st = 0.8; } }
+          biteSwarm(f, hx, hy); f.attacks--; f.stamina = Math.min(f.stamina + 2, f.lethal ? 9 : 5.5);
+          f.state = 'retreat'; f.st = f.lethal ? rand(0.6, 0.9) : rand(1.0, 1.4);
+        } else if (dist > giveUpR || f.stamina <= 0) tire();
+        else if (f.st > 3.2) { f.state = 'retreat'; f.st = 0.8; }
         break;
       }
       case 'retreat':
-        desired = Math.atan2(-dy, -dx); speed = T.charge * 0.6; f.st -= dt;
+        desired = Math.atan2(-dy, -dx); speed = T.charge * 0.6; f.st -= dt; f.stamina -= dt * strain * 0.5;
         if (f.st <= 0) {
           const lostIt = f.lost && dist > aggroR * 1.6; f.lost = false;
-          if (f.relentless && S.alive && !lostIt && dist < aggroR * 2.6) { f.state = 'alert'; f.st = 0.3; f.alert = 0.7; sfx.alert(f.tier); }
-          else if (f.attacks > 0 && dist < aggroR * 1.8 && f.patience > 0) { f.state = 'alert'; f.st = 0.36; f.alert = 0.7; sfx.alert(f.tier); }
-          else if (f.attacks > 0 || f.relentless) { f.state = 'wander'; f.attacks = Math.max(f.attacks, 1); }
-          else { f.state = f.guard ? 'rest' : 'leave'; f.st = 10; if (!f.guard) f.calm = true; }
+          if (f.attacks <= 0) { f.state = f.guard ? 'rest' : 'leave'; f.st = 10; if (!f.guard) f.calm = true; }
+          else if (!S.alive || lostIt || f.stamina <= 0 || dist > giveUpR) tire();
+          else { f.state = 'alert'; f.st = f.lethal ? 0.3 : 0.4; f.alert = 0.7; f.lethal = isLethal(f); sfx.alert(f.tier); }
         }
+        break;
+      case 'tired':
+        desired = Math.atan2(-dy, -dx); speed = T.cruise * 0.7; f.st -= dt;
+        if (f.st <= 0) f.state = 'wander';
         break;
       case 'leave':
         desired = Math.atan2(-dy, -dx); speed = T.cruise * 1.5; break;
       case 'rest':
-        f.st -= dt; if (f.st <= 0) { f.state = 'wander'; f.attacks = f.tier; f.patience = 14; }
+        f.st -= dt; if (f.st <= 0) { f.state = 'wander'; f.attacks = f.tier; }
         break;
     }
-    if (f.state === 'alert' || f.state === 'charge' || f.state === 'retreat') f.patience -= dt;
   }
   if (f.state === 'wander' || f.state === 'rest') {
     f.turnT -= dt;
@@ -1133,12 +1142,13 @@ function eatFish(f) {
   G.shake = Math.max(G.shake, f.tier >= 3 ? f.tier * 0.8 : 0);
   sfx.chomp(f.tier); sfx.splat(clamp(f.tier / 6 + S.dots.length / 1400, 0.1, 1));
   if (S.prey === f) S.prey = null;
-  if (!G.hints.ate) { G.hints.ate = 1; showHint('A red skull means too big to eat. It bites once per tier, and if it is far bigger than you it hunts you to death.', 5); }
+  if (!G.hints.ate) { G.hints.ate = 1; showHint('A red skull means too big to eat. It bites once per tier, then leaves. Outswim it and it tires out.', 5); }
 }
-// how many levels short the swarm is; 3+ short and the fish hunts it to death
+// bites hit harder the more levels short the swarm is
 const levelGap = f => Math.max(1, f.T.eat - G.level);
-const isRelentless = f => f.T.eat - G.level >= 3;
 const biteDamage = f => Math.round(f.T.dmg * (1 + 0.5 * (levelGap(f) - 1)));
+// hunts to death when its remaining bites are enough to wipe out the swarm
+const isLethal = f => f.attacks * (f.dmg || biteDamage(f)) > S.dots.length - DEAD_MASS;
 // a bite always lands: it rips out the piranhas closest to the jaws
 function removeNearestDots(x, y, n) {
   n = Math.min(n, S.dots.length);
@@ -1668,7 +1678,7 @@ function render() {
   for (const f of vf) if (f.alert > 0) {
     const px = Math.round(13 * SCALE), sx = (f.x - L) * SCALE, sy = (f.y - T - f.g.W - 22 - Math.abs(Math.sin(G.time * 12)) * 3) * SCALE;
     ctx.globalAlpha = Math.min(1, f.alert * 3); ctx.font = `${px}px Bungee, Impact, sans-serif`;
-    const mark = f.relentless ? '!!' : '!';
+    const mark = f.lethal ? '!!' : '!';
     ctx.lineWidth = SCALE * 1.6; ctx.strokeStyle = '#000'; ctx.strokeText(mark, sx, sy); ctx.fillStyle = '#ff3b30'; ctx.fillText(mark, sx, sy);
   }
   if (!boss.dead && (boss.state === 'coil') && boss.vis > 0.6) {
@@ -1927,7 +1937,7 @@ function buildGuide() {
   const lvl = G.mode === 'title' ? 1 : G.level;
   for (let t = 1; t <= 6; t++) {
     const h = document.createElement('div'); h.className = 'tier-h';
-    h.textContent = t === 1 ? 'TIER 1 · ALWAYS EDIBLE' : `TIER ${t} · EAT AT LV ${TIERS[t].eat} · BITES ${t}×` + (TIERS[t].eat > 3 ? ` · HUNTS LV ${TIERS[t].eat - 3}${TIERS[t].eat > 4 ? ' AND BELOW' : ''} TO DEATH` : '');
+    h.textContent = t === 1 ? 'TIER 1 · ALWAYS EDIBLE' : `TIER ${t} · EAT AT LV ${TIERS[t].eat} · ${t} BITES, THEN IT LEAVES`;
     g.appendChild(h);
     for (const sp of SPECIES_BY_TIER[t]) {
       const c = document.createElement('div'); c.className = 'gcard';
