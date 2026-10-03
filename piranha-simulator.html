@@ -124,7 +124,7 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
 .gcard .n{font-weight:700;font-size:11px;color:var(--bone);}
 .gcard .ok{color:var(--moss);} .gcard .bad{color:var(--blood);}
 .tier-h{grid-column:1/-1;font-size:10px;letter-spacing:.2em;color:var(--muted);margin-top:6px;}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
 .stat{background:rgba(0,0,0,.35);padding:8px;text-align:center;display:flex;flex-direction:column;gap:4px;}
 .stat b{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums;color:var(--gold);}
 .stat span{font-size:9px;letter-spacing:.14em;color:var(--muted);}
@@ -175,8 +175,8 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
     <p class="lede">You are a swarm of piranhas loose in the Amazon. Eat smaller fish to grow the swarm. Big fish bite back until you are big enough to take them. A giant anaconda hides in the lagoon at the centre of the map.</p>
     <ul class="rows">
       <li><b>HOLD &amp; DRAG</b><span>The swarm swims toward your thumb.</span></li>
-      <li><b>DOUBLE-TAP</b><span>Scatter to dodge a bite, then regroup where your thumb is. Short cooldown.</span></li>
-      <li><b>RED SKULL</b><span>Too big to eat. Bigger tiers bite more times before they swim off.</span></li>
+      <li><b>DOUBLE-TAP</b><span>Scatter so attackers lose track of you, then regroup where your thumb is. Short cooldown.</span></li>
+      <li><b>RED SKULL</b><span>Too big to eat. It bites once per tier, then swims off. If it is far bigger than you, it hunts you to death.</span></li>
       <li><b>KEYBOARD</b><span>WASD or arrows to swim, Space to scatter, P to pause.</span></li>
     </ul>
     <div class="actions"><button id="btnStart" class="btn primary">START HUNTING</button><button id="btnGuide0" class="btn">FIELD GUIDE</button></div>
@@ -309,7 +309,7 @@ SPECIES.forEach(sp => SPECIES_BY_TIER[sp.tier].push(sp));
 /* ================= world generation ================= */
 const WORLD = 3600, CELL = 4, GN = WORLD / CELL, CH = 128, NCH = Math.ceil(WORLD / CH);
 const CENTER = { x: WORLD / 2, y: WORLD / 2 };
-const LAGOON_R = 230, MARGIN = 44;
+const LAGOON_R = 270, MARGIN = 44;
 let grid = null;            // signed distance-ish to shore in px (positive = water)
 let rivers = [], guardSpots = [], startPos = null;
 
@@ -399,45 +399,52 @@ function genWorld(seed) {
   rivers = []; guardSpots = [];
   // central lagoon: the anaconda's lair
   stampBlob(CENTER.x, CENTER.y, LAGOON_R, R, 0.1);
-  // main rivers, from the far jungle into the lagoon
+  // main rivers: wide and slow, from the far jungle into the lagoon
   const nMain = 6, a0 = R() * TAU, mains = [];
   for (let i = 0; i < nMain; i++) {
-    const ang = a0 + i * TAU / nMain + (R() - 0.5) * 0.5, dist = 1480 + R() * 170;
+    const ang = a0 + i * TAU / nMain + (R() - 0.5) * 0.5, dist = 1460 + R() * 160;
     const pts = meander(R, CENTER.x + Math.cos(ang) * dist, CENTER.y + Math.sin(ang) * dist,
-      { target: CENTER, stop: LAGOON_R - 50, amp: 0.75 + R() * 0.3, wav: 240 + R() * 160, r0: 36 + R() * 12, rVar: 11 });
+      { target: CENTER, stop: LAGOON_R - 60, amp: 0.55 + R() * 0.3, wav: 330 + R() * 200, r0: 64 + R() * 22, rVar: 20 });
     mains.push(pts); rivers.push(pts); stampPath(pts);
   }
-  // a wandering ring river linking the mains
+  // a broad ring river linking the mains
   const ring = [], p1 = R() * TAU, p2 = R() * TAU, p3 = R() * TAU;
   for (let i = 0; i <= 900; i++) {
     const th = i / 900 * TAU;
     const rr = 960 + 120 * Math.sin(3 * th + p1) + 70 * Math.sin(7 * th + p2);
-    ring.push({ x: CENTER.x + Math.cos(th) * rr, y: CENTER.y + Math.sin(th) * rr, r: 24 + 9 * Math.sin(5 * th + p3) });
+    ring.push({ x: CENTER.x + Math.cos(th) * rr, y: CENTER.y + Math.sin(th) * rr, r: 50 + 14 * Math.sin(5 * th + p3) });
   }
   rivers.push(ring); stampPath(ring);
-  // outer oxbow arcs between neighbouring river mouths
+  // outer arcs between neighbouring river mouths
   for (let i = 0; i < nMain; i++) {
-    if (R() < 0.45) continue;
+    if (R() < 0.3) continue;
     const a = mains[i][Math.floor(mains[i].length * 0.12)], b = mains[(i + 1) % nMain][Math.floor(mains[(i + 1) % nMain].length * 0.12)];
-    const pts = meander(R, a.x, a.y, { target: b, stop: 30, amp: 0.6, wav: 300, r0: 20 + R() * 6, rVar: 6 });
+    const pts = meander(R, a.x, a.y, { target: b, stop: 30, amp: 0.5, wav: 360, r0: 42 + R() * 12, rVar: 10 });
     rivers.push(pts); stampPath(pts);
   }
-  // tributaries with lakes at their heads
   const trunks = rivers.slice();
-  for (let k = 0; k < 16; k++) {
+  const awayFromLair = p => Math.hypot(p.x - CENTER.x, p.y - CENTER.y) > LAGOON_R + 360;
+  // flooded-forest lakes: big open water sitting on the rivers
+  for (let k = 0, placed = 0; k < 40 && placed < 8; k++) {
+    const tr = trunks[Math.floor(R() * trunks.length)], p = tr[Math.floor(tr.length * (0.15 + R() * 0.7))];
+    if (!awayFromLair(p)) continue;
+    stampBlob(p.x + (R() - 0.5) * 80, p.y + (R() - 0.5) * 80, 170 + R() * 170, R, 0.22); placed++;
+  }
+  // a few wide side channels, each opening into a lake
+  for (let k = 0; k < 9; k++) {
     const tr = trunks[Math.floor(R() * trunks.length)];
     const p = tr[Math.floor(tr.length * (0.15 + R() * 0.6))];
-    if (Math.hypot(p.x - CENTER.x, p.y - CENTER.y) < LAGOON_R + 300) continue;
+    if (!awayFromLair(p)) continue;
     const dir = (p.h !== undefined ? p.h : Math.atan2(p.y - CENTER.y, p.x - CENTER.x)) + (R() < 0.5 ? 1 : -1) * (1.2 + R() * 0.7);
-    const pts = meander(R, p.x, p.y, { heading: dir, length: 320 + R() * 560, amp: 0.9, wav: 160 + R() * 120, r0: 14 + R() * 9, rVar: 5 });
+    const pts = meander(R, p.x, p.y, { heading: dir, length: 280 + R() * 420, amp: 0.7, wav: 220 + R() * 120, r0: 32 + R() * 12, rVar: 8 });
     rivers.push(pts); stampPath(pts);
-    if (pts.length && R() < 0.6) { const e = pts[pts.length - 1]; stampBlob(e.x, e.y, 50 + R() * 60, R, 0.18); }
+    if (pts.length && R() < 0.85) { const e = pts[pts.length - 1]; stampBlob(e.x, e.y, 90 + R() * 90, R, 0.2); }
   }
-  // lakes swelling out of river bends
-  for (let k = 0; k < 9; k++) {
+  // smaller lakes swelling out of river bends
+  for (let k = 0; k < 12; k++) {
     const tr = trunks[Math.floor(R() * trunks.length)], p = tr[Math.floor(tr.length * (0.1 + R() * 0.75))];
-    if (Math.hypot(p.x - CENTER.x, p.y - CENTER.y) < LAGOON_R + 260) continue;
-    stampBlob(p.x + (R() - 0.5) * 60, p.y + (R() - 0.5) * 60, 70 + R() * 70, R, 0.2);
+    if (!awayFromLair(p)) continue;
+    stampBlob(p.x + (R() - 0.5) * 60, p.y + (R() - 0.5) * 60, 90 + R() * 80, R, 0.2);
   }
   // ragged shorelines
   for (let gy = 0; gy < GN; gy++) for (let gx = 0; gx < GN; gx++) {
@@ -445,11 +452,11 @@ function genWorld(seed) {
     grid[i] += (vnoise(x / 70, y / 70, 1) - 0.5) * 12 + (vnoise(x / 26, y / 26, 2) - 0.5) * 5;
   }
   // islands in wide water
-  for (let k = 0; k < 900; k++) {
+  for (let k = 0; k < 500; k++) {
     const x = 200 + R() * (WORLD - 400), y = 200 + R() * (WORLD - 400), d = depthAt(x, y);
     const dc = Math.hypot(x - CENTER.x, y - CENTER.y);
-    if (d < 40 || dc < LAGOON_R + 40) continue;
-    const r = Math.min((d - 18) / 1.25, 8 + R() * 30);
+    if (d < 70 || dc < LAGOON_R + 40) continue;
+    const r = Math.min((d - 40) / 1.25, 10 + R() * 34);
     if (r > 5) stampLand(x, y, r, R, 0.15);
   }
   // rocky islets inside the lagoon
@@ -877,7 +884,7 @@ const G = {
   spawnT: 0, shake: 0, stats: null, won: false, hints: {}, lairWarnT: 0,
 };
 const S = { x: 0, y: 0, vx: 0, vy: 0, dots: [], dispT: 0, dispCd: 0, regroup: null, inv: 0, prey: null, alive: true, moving: false };
-const DISP_CD = 5, DISP_T = 1.05;
+const DISP_CD = 4, DISP_T = 1.05;
 const swarmR = () => 2.2 + 1.45 * Math.sqrt(S.dots.length);
 const levelFor = m => { let l = 1; for (let i = 0; i < LEVELS.length; i++) if (m >= LEVELS[i].need) l = i + 1; return l; };
 
@@ -894,6 +901,7 @@ function newStats() { return { eaten: 0, byTier: [0, 0, 0, 0, 0, 0, 0], biggest:
 function resetGame(seed) {
   genWorld(seed); chunks.clear();
   G.fish = []; G.blood = []; G.rings = []; G.bones = []; G.texts = []; G.zaps = [];
+  resetBlood();
   G.time = 0; G.spawnT = 0; G.shake = 0; G.won = false; G.stats = newStats(); G.hints = {}; G.lairWarnT = 0;
   S.x = startPos.x; S.y = startPos.y; S.vx = S.vy = 0; S.dots = []; S.dispT = 0; S.dispCd = 0; S.regroup = null; S.inv = 0; S.prey = null; S.alive = true;
   addDots(START_MASS, S.x, S.y);
@@ -920,7 +928,7 @@ function chooseTier(x, y) {
   const zm = zoneMaxTier(x, y), w = [];
   let sum = 0;
   for (let t = 1; t <= 6; t++) {
-    let k = TIERS[t].weight * (t <= zm ? 1 : t === zm + 1 ? 0.13 : 0);
+    let k = TIERS[t].weight * (t <= zm ? 1 : t === zm + 1 && zm >= 3 ? 0.13 : 0);
     // as the swarm grows, thin out prey that is far too small to matter
     const he = highestEdibleTier();
     if (t === he) k *= 2; else if (t < he - 1) k *= 0.45;
@@ -976,7 +984,8 @@ function updateFish(f, dt) {
       f.state = 'caught';
       f.hp -= Math.sqrt(S.dots.length) * 4.2 * dt;
       speed = T.flee * 0.22; desired = f.a + Math.sin(G.time * 18 + f.x) * 1.6; turnRate = 8;
-      if (Math.random() < dt * (6 + f.tier * 4)) bleed(f.x + rand(-f.g.W, f.g.W), f.y + rand(-f.g.W, f.g.W), 1 + f.tier);
+      if (Math.random() < dt * (8 + f.tier * 6)) bleed(f.x + rand(-f.g.W, f.g.W), f.y + rand(-f.g.W, f.g.W), 1 + f.tier);
+      addBlood(f.x, f.y, dt * (0.5 + f.tier * 0.45), f.g.W * 1.4 + 3);
       if (!S.prey || S.prey.dead || Math.hypot(S.prey.x - S.x, S.prey.y - S.y) > dist) S.prey = f;
       if (f.hp <= 0) { eatFish(f); return; }
     } else if (dist < 40 + R + f.g.L * 0.6) {
@@ -989,9 +998,10 @@ function updateFish(f, dt) {
     switch (f.state) {
       case 'wander': case 'flee': case 'caught':
         f.state = 'wander';
-        if (!f.calm && S.alive && f.attacks > 0 && dist < aggroR && G.mode === 'play') {
+        if (!f.calm && S.alive && (f.attacks > 0 || isRelentless(f)) && dist < aggroR && G.mode === 'play') {
           f.state = 'alert'; f.st = f.seen ? 0.38 : 0.62; f.seen = true; f.alert = 0.9; sfx.alert(f.tier);
-          if (!G.hints.scatter) { G.hints.scatter = 1; showHint('A big fish has spotted you. Double-tap to scatter before it bites.', 4); }
+          f.relentless = isRelentless(f); f.dmg = biteDamage(f);
+          if (!G.hints.scatter) { G.hints.scatter = 1; showHint('A big fish is coming for you. Double-tap to scatter and it loses track of you.', 4); }
         }
         break;
       case 'alert':
@@ -1002,16 +1012,18 @@ function updateFish(f, dt) {
         const px = S.x + S.vx * 0.25, py = S.y + S.vy * 0.25;
         desired = Math.atan2(py - f.y, px - f.x); speed = T.charge; turnRate = T.turn * 0.9;
         const hx = f.x + Math.cos(f.a) * f.g.L * 0.42, hy = f.y + Math.sin(f.a) * f.g.L * 0.42;
-        if (S.inv <= 0 && Math.hypot(hx - S.x, hy - S.y) < R * 0.6 + 3) {
-          biteSwarm(f, hx, hy); f.attacks--; f.state = 'retreat'; f.st = rand(1.0, 1.4);
+        if (S.inv <= 0 && S.dispT <= 0 && Math.hypot(hx - S.x, hy - S.y) < R * 0.6 + 3) {
+          biteSwarm(f, hx, hy); f.attacks--; f.state = 'retreat'; f.st = f.relentless ? rand(0.6, 0.9) : rand(1.0, 1.4);
         } else { f.st -= dt; if (f.st <= 0) { f.state = 'retreat'; f.st = 0.8; } }
         break;
       }
       case 'retreat':
         desired = Math.atan2(-dy, -dx); speed = T.charge * 0.6; f.st -= dt;
         if (f.st <= 0) {
-          if (f.attacks > 0 && dist < aggroR * 1.8 && f.patience > 0) { f.state = 'alert'; f.st = 0.36; f.alert = 0.7; sfx.alert(f.tier); }
-          else if (f.attacks > 0) f.state = 'wander';
+          const lostIt = f.lost && dist > aggroR * 1.6; f.lost = false;
+          if (f.relentless && S.alive && !lostIt && dist < aggroR * 2.6) { f.state = 'alert'; f.st = 0.3; f.alert = 0.7; sfx.alert(f.tier); }
+          else if (f.attacks > 0 && dist < aggroR * 1.8 && f.patience > 0) { f.state = 'alert'; f.st = 0.36; f.alert = 0.7; sfx.alert(f.tier); }
+          else if (f.attacks > 0 || f.relentless) { f.state = 'wander'; f.attacks = Math.max(f.attacks, 1); }
           else { f.state = f.guard ? 'rest' : 'leave'; f.st = 10; if (!f.guard) f.calm = true; }
         }
         break;
@@ -1053,39 +1065,94 @@ function eatFish(f) {
   f.dead = true;
   const food = randi(f.T.food[0], f.T.food[1]);
   addDots(food, f.x, f.y);
-  bleed(f.x, f.y, 10 + f.tier * 14, f.g.L * 0.3);
+  bleed(f.x, f.y, 10 + f.tier * 16, f.g.L * 0.3, 1 + f.tier * 0.15);
+  addBlood(f.x, f.y, 0.7 + f.tier * 0.55, 7 + f.g.L * 0.55);
+  blood.lastKill = G.time;
   G.rings.push({ x: f.x, y: f.y, r: f.g.W, vr: 30 + f.tier * 8, life: 0.6, max: 0.6, c: '#d8f0dc' });
   G.bones.push({ spr: SPR[f.sp.id].bones, g: f.g, x: f.x, y: f.y, a: f.a, life: 6, max: 6 });
   floatText(f.x, f.y - f.g.W - 4, '+' + food, '#fff3a0', f.tier >= 4 ? 1.35 : 1);
   G.stats.eaten++; G.stats.byTier[f.tier]++;
   if (!G.stats.biggest || f.tier >= G.stats.biggest.tier) G.stats.biggest = f.sp;
   G.shake = Math.max(G.shake, f.tier >= 3 ? f.tier * 0.8 : 0);
-  sfx.chomp(f.tier);
+  sfx.chomp(f.tier); sfx.splat(clamp(f.tier / 6 + S.dots.length / 1400, 0.1, 1));
   if (S.prey === f) S.prey = null;
-  if (!G.hints.ate) { G.hints.ate = 1; showHint('Fish with a red skull are too big for you. They bite until they get bored.', 4.5); }
+  if (!G.hints.ate) { G.hints.ate = 1; showHint('A red skull means too big to eat. It bites once per tier, and if it is far bigger than you it hunts you to death.', 5); }
+}
+// how many levels short the swarm is; 3+ short and the fish hunts it to death
+const levelGap = f => Math.max(1, f.T.eat - G.level);
+const isRelentless = f => f.T.eat - G.level >= 3;
+const biteDamage = f => Math.round(f.T.dmg * (1 + 0.5 * (levelGap(f) - 1)));
+// a bite always lands: it rips out the piranhas closest to the jaws
+function removeNearestDots(x, y, n) {
+  n = Math.min(n, S.dots.length);
+  const idx = S.dots.map((d, i) => [(d.x - x) * (d.x - x) + (d.y - y) * (d.y - y), i]).sort((a, b) => a[0] - b[0]).slice(0, n).map(e => e[1]).sort((a, b) => b - a);
+  for (const i of idx) { const d = S.dots[i]; bleed(d.x, d.y, 3, 2); S.dots[i] = S.dots[S.dots.length - 1]; S.dots.pop(); }
+  return n;
 }
 function biteSwarm(f, hx, hy) {
-  const br = Math.max(3.5, f.g.W * 1.1 + f.g.L * 0.12), cap = f.T.dmg;
-  let killed = 0;
-  for (let i = S.dots.length - 1; i >= 0 && killed < cap; i--) {
-    const d = S.dots[i];
-    if (Math.hypot(d.x - hx, d.y - hy) < br) { bleed(d.x, d.y, 2); S.dots[i] = S.dots[S.dots.length - 1]; S.dots.pop(); killed++; }
-  }
+  const killed = removeNearestDots(hx, hy, f.dmg || biteDamage(f)), br = Math.max(4, f.g.W * 1.2 + f.g.L * 0.15);
   for (const d of S.dots) { const ex = d.x - hx, ey = d.y - hy, l = Math.hypot(ex, ey) || 1; if (l < br * 2.5) { d.vx += ex / l * 140; d.vy += ey / l * 140; } }
   S.inv = 0.45; G.stats.bites++; G.lastBiter = f.sp.name;
   if (f.sp.id === 'eel') for (let i = 0; i < 6; i++) G.zaps.push({ x: hx, y: hy, a: Math.random() * TAU, len: rand(8, 22), life: 0.35 });
-  if (killed > 0) {
-    floatText(hx, hy - 6, '-' + killed, '#ff5a4a', 1 + Math.min(0.6, killed / 40));
-    G.shake = Math.max(G.shake, 3 + f.tier * 1.4); flashHurt(Math.min(1, 0.35 + killed / 30)); sfx.hit(f.tier);
-  } else { floatText(hx, hy - 6, 'MISS', '#e8f4ea', 1); sfx.miss(); }
+  bleed(hx, hy, 6 + killed, f.g.W, 1.4);
+  addBlood(hx, hy, 0.5 + killed * 0.05, 8 + f.g.W);
+  floatText(hx, hy - 6, '-' + killed, '#ff5a4a', 1 + Math.min(0.6, killed / 40));
+  G.shake = Math.max(G.shake, 3 + f.tier * 1.4); flashHurt(Math.min(1, 0.35 + killed / 30)); sfx.hit(f.tier); sfx.splat(0.3);
 }
-function bleed(x, y, n, spread = 2) {
+function bleed(x, y, n, spread = 2, power = 1) {
+  n = Math.round(n * Math.min(3, 0.6 + bloodScale() * 0.5));
   for (let i = 0; i < n; i++) {
-    const a = Math.random() * TAU, s = rand(4, 22);
+    const a = Math.random() * TAU, s = rand(4, 24) * power, big = Math.random() < 0.2;
     G.blood.push({ x: x + Math.cos(a) * rand(0, spread), y: y + Math.sin(a) * rand(0, spread), vx: Math.cos(a) * s, vy: Math.sin(a) * s,
-      life: rand(1.2, 3), max: 3, c: Math.random() < 0.6 ? '#8e1616' : Math.random() < 0.6 ? '#b42420' : '#5e0c0c' });
+      life: rand(1.4, big ? 4.5 : 3), max: big ? 4.5 : 3, s: big ? 2 : 1, c: big ? (Math.random() < 0.5 ? '#4e0606' : '#6e0a0a') : Math.random() < 0.6 ? '#8e1616' : Math.random() < 0.6 ? '#b42420' : '#5e0c0c' });
   }
-  if (G.blood.length > 1600) G.blood.splice(0, G.blood.length - 1600);
+  if (G.blood.length > 2600) G.blood.splice(0, G.blood.length - 2600);
+}
+
+/* ================= blood in the water =================
+   A field on the terrain grid that kills stain, spreads near the camera and fades over a minute or so. */
+const blood = { f: null, rowT: null, sweep: 0, spilled: 0, lastKill: -99 };
+const BLOOD_FADE = 80;
+function resetBlood() { blood.f = new Float32Array(GN * GN); blood.rowT = new Float32Array(GN); blood.sweep = 0; blood.spilled = 0; blood.lastKill = -99; }
+const bloodScale = () => 1 + S.dots.length / 220;
+function addBlood(x, y, amt, rad) {
+  const f = blood.f; if (!f) return;
+  amt *= bloodScale(); rad *= 1 + S.dots.length / 700;
+  blood.spilled += amt * rad * rad * 0.004;
+  const r = rad / CELL, cx = x / CELL - 0.5, cy = y / CELL - 0.5;
+  const x0 = Math.max(1, Math.floor(cx - r)), x1 = Math.min(GN - 2, Math.ceil(cx + r)), y0 = Math.max(1, Math.floor(cy - r)), y1 = Math.min(GN - 2, Math.ceil(cy + r));
+  for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) {
+    const dx = (gx - cx) / r, dy = (gy - cy) / r, d2 = dx * dx + dy * dy; if (d2 >= 1) continue;
+    const i = gy * GN + gx; if (grid[i] < -2) continue;
+    f[i] = Math.min(4, f[i] + amt * (1 - d2) * (0.6 + 0.8 * Math.random()));
+  }
+}
+function updateBlood(dt) {
+  const f = blood.f; if (!f) return;
+  // spread near the camera, never onto land
+  const m = 24, x0 = Math.max(1, Math.floor((cam.x - viewW / 2) / CELL) - m), x1 = Math.min(GN - 2, Math.ceil((cam.x + viewW / 2) / CELL) + m);
+  const y0 = Math.max(1, Math.floor((cam.y - viewH / 2) / CELL) - m), y1 = Math.min(GN - 2, Math.ceil((cam.y + viewH / 2) / CELL) + m);
+  const k = Math.min(0.5, dt * 1.6);
+  for (let gy = y0; gy <= y1; gy++) {
+    const row = gy * GN;
+    for (let gx = x0; gx <= x1; gx++) {
+      const i = row + gx, v = f[i];
+      const a = f[i - 1], b = f[i + 1], c = f[i - GN], d = f[i + GN];
+      if (v === 0 && a === 0 && b === 0 && c === 0 && d === 0) continue;
+      if (grid[i] < -2) { f[i] = 0; continue; }
+      const n = (grid[i - 1] < -2 ? v : a) + (grid[i + 1] < -2 ? v : b) + (grid[i - GN] < -2 ? v : c) + (grid[i + GN] < -2 ? v : d);
+      f[i] = v + (n * 0.25 - v) * k;
+    }
+  }
+  // slow fade over the whole map, a few rows per frame
+  for (let r = 0; r < 8; r++) {
+    const gy = blood.sweep, el = G.time - blood.rowT[gy], fade = Math.exp(-Math.max(0, el) / BLOOD_FADE), row = gy * GN;
+    blood.rowT[gy] = G.time;
+    for (let gx = 0; gx < GN; gx++) { const i = row + gx; if (f[i]) { const v = f[i] * fade; f[i] = v < 0.01 ? 0 : v; } }
+    blood.sweep = (gy + 1) % GN;
+  }
+  // a freshly fed swarm trails blood
+  if (S.alive && S.moving && G.time - blood.lastKill < 5 && G.level >= 3) addBlood(S.x, S.y, dt * 0.06 * G.level, swarmR() * 0.8);
 }
 function floatText(x, y, txt, col, size = 1) { G.texts.push({ x, y, txt, col, size, life: 1.1, max: 1.1 }); }
 
@@ -1116,6 +1183,7 @@ function updateBoss(dt) {
       touching = true; boss.hp -= Math.sqrt(S.dots.length) * 4.2 * 0.55 * dt; boss.hurt = 0.2;
       S.prey = { x: boss.segs[bi].x, y: boss.segs[bi].y, dead: false, g: { W: segR(bi), L: 8 }, boss: true };
       if (Math.random() < dt * 30) bleed(boss.segs[bi].x + rand(-4, 4), boss.segs[bi].y + rand(-4, 4), 2);
+      addBlood(boss.segs[bi].x, boss.segs[bi].y, dt * 2.5, 14);
       if (boss.hp <= 0) { killBoss(); return; }
     }
   }
@@ -1138,7 +1206,7 @@ function updateBoss(dt) {
       break;
     case 'strike':
       speed = 250; desired = boss.strikeA; turn = 1.2; boss.st -= dt;
-      if (S.inv <= 0 && dist < R * 0.65 + 6) { snakeBite(h.x, h.y); boss.state = 'recover'; boss.st = 1.3; }
+      if (S.inv <= 0 && S.dispT <= 0 && dist < R * 0.65 + 6) { snakeBite(h.x, h.y); boss.state = 'recover'; boss.st = 1.3; }
       else if (boss.st <= 0) { boss.state = 'recover'; boss.st = 1.0; }
       break;
     case 'recover':
@@ -1159,18 +1227,15 @@ function updateBoss(dt) {
   }
 }
 function snakeBite(x, y) {
-  const cap = boss.unlocked ? 32 : 70, br = 16;
-  let killed = 0;
-  for (let i = S.dots.length - 1; i >= 0 && killed < cap; i--) {
-    const d = S.dots[i]; if (Math.hypot(d.x - x, d.y - y) < br) { bleed(d.x, d.y, 2); S.dots[i] = S.dots[S.dots.length - 1]; S.dots.pop(); killed++; }
-  }
+  const killed = removeNearestDots(x, y, boss.unlocked ? 32 : 70);
   S.inv = 0.5; G.lastBiter = 'Green Anaconda';
-  if (killed) { floatText(x, y - 8, '-' + killed, '#ff5a4a', 1.5); G.shake = 12; flashHurt(1); sfx.hit(6); }
-  else { floatText(x, y - 8, 'MISS', '#e8f4ea', 1.2); sfx.miss(); }
+  bleed(x, y, 14 + killed, 6, 1.5); addBlood(x, y, 1 + killed * 0.04, 18);
+  floatText(x, y - 8, '-' + killed, '#ff5a4a', 1.5); G.shake = 12; flashHurt(1); sfx.hit(6); sfx.splat(0.6);
 }
 function killBoss() {
   boss.dead = true; boss.engaged = false; boss.deathT = 0; S.prey = null;
-  for (let i = 0; i < boss.n; i += 2) bleed(boss.segs[i].x, boss.segs[i].y, 14, 6);
+  for (let i = 0; i < boss.n; i += 2) { bleed(boss.segs[i].x, boss.segs[i].y, 14, 6, 1.6); addBlood(boss.segs[i].x, boss.segs[i].y, 3, 24); }
+  blood.lastKill = G.time; sfx.splat(1);
   addDots(120, boss.segs[8].x, boss.segs[8].y);
   G.shake = 16; sfx.win(); G.won = true;
   floatText(boss.segs[0].x, boss.segs[0].y - 12, 'APEX', '#ff3b30', 2);
@@ -1261,6 +1326,8 @@ function triggerScatter() {
   for (let s = 0.05; s <= 1.0001; s += 0.05) { const px = S.x + ex * s, py = S.y + ey * s; if (depthAt(px, py) > 3) best = { x: px, y: py }; else break; }
   S.regroup = best;
   for (const d of S.dots) { const a = Math.atan2(d.sy, d.sx) + rand(-0.6, 0.6), sp = rand(110, 240); d.vx = Math.cos(a) * sp + S.vx * 0.3; d.vy = Math.sin(a) * sp + S.vy * 0.3; }
+  for (const f of G.fish) if ((f.state === 'charge' || f.state === 'alert') && Math.hypot(f.x - S.x, f.y - S.y) < 240) { f.state = 'retreat'; f.st = rand(1.2, 1.7); f.lost = true; }
+  if (boss.state === 'coil' || boss.state === 'strike') { boss.state = 'recover'; boss.st = 0.9; }
   G.rings.push({ x: S.x, y: S.y, r: swarmR(), vr: 130, life: 0.5, max: 0.5, c: '#e8f4ea' });
   if (best.x !== S.x || best.y !== S.y) G.rings.push({ x: best.x, y: best.y, r: 26, vr: -40, life: 0.55, max: 0.55, c: '#ffd23a' });
   sfx.scatter();
@@ -1273,6 +1340,11 @@ function step(dt) {
   updateSwarm(dt);
   for (let i = 0; i < G.fish.length; i++) { const f = G.fish[i]; if (!f.dead) updateFish(f, dt); }
   updateBoss(dt);
+  updateBlood(dt);
+  if (S.prey && !S.prey.dead && G.mode === 'play') {
+    G.crunchT = (G.crunchT || 0) - dt;
+    if (G.crunchT <= 0) { G.crunchT = rand(0.06, 0.13); sfx.crunch(); }
+  }
   // population around the swarm
   G.spawnT -= dt;
   if (G.spawnT <= 0) {
@@ -1302,7 +1374,7 @@ function step(dt) {
       if (lv === MAX_LEVEL && !G.hints.max) { G.hints.max = 1; setTimeout(() => showHint('MAX MASS. The lagoon at the centre of the map is open. Hunt the anaconda.', 5), 2300); }
     }
     if (S.alive && S.dots.length < DEAD_MASS) {
-      S.alive = false; for (const d of S.dots) bleed(d.x, d.y, 4, 3); S.dots = []; sfx.dead();
+      S.alive = false; for (const d of S.dots) bleed(d.x, d.y, 4, 3); addBlood(S.x, S.y, 1.5, 20); S.dots = []; sfx.dead(); sfx.splat(0.8);
       setTimeout(() => { if (G.mode === 'play') endGame(false); }, 1500);
     }
     G.lairWarnT -= dt;
@@ -1338,6 +1410,7 @@ function drawRot(img, x, y, a, g, alpha) {
 }
 const DOT_COL = ['#11171a', '#283135', '#cf432c', '#b9cac5'];
 let lastGen = 0;
+const PBUCKET = new Map();
 function drawDots(L, T, alpha) {
   const t = G.time;
   for (let c = 0; c < 4; c++) {
@@ -1370,6 +1443,7 @@ function render() {
     }
   }
   lastGen = chunkGen;
+  drawBlood(L, T);
   // sunlight glints on the surface
   bx.fillStyle = 'rgba(200,236,216,.55)';
   const SG = 18;
@@ -1386,10 +1460,18 @@ function render() {
   for (const f of vf) drawRot(SPR[f.sp.id].shadows[Math.floor(f.frame)], f.x + 2, f.y + 3, f.a, f.g, 0.26);
   for (const f of vf) drawRot(SPR[f.sp.id].frames[Math.floor(f.frame)], f.x, f.y, f.a, f.g, f.state === 'caught' ? 0.85 + Math.sin(G.time * 40) * 0.15 : 0.95);
   drawBoss(L, T);
+  // blood particles, batched by colour and fade step
+  for (const arr of PBUCKET.values()) arr.length = 0;
   for (const p of G.blood) {
-    bx.globalAlpha = clamp(p.life / p.max * 1.3, 0, 0.9); bx.fillStyle = p.c;
-    bx.fillRect(Math.round(p.x - L), Math.round(p.y - T), 1, 1);
+    const a = Math.min(4, Math.floor(clamp(p.life / p.max * 1.3, 0, 0.9) * 4.5)); if (a <= 0) continue;
+    const k = p.c + a; let arr = PBUCKET.get(k); if (!arr) PBUCKET.set(k, arr = []); arr.push(p);
   }
+  for (const [k, arr] of PBUCKET) {
+    if (!arr.length) continue;
+    bx.fillStyle = k.slice(0, 7); bx.globalAlpha = +k[7] * 0.225;
+    for (const p of arr) bx.fillRect(Math.round(p.x - L), Math.round(p.y - T), p.s || 1, p.s || 1);
+  }
+  bx.globalAlpha = 1;
   // the swarm
   bx.globalAlpha = 0.16; bx.fillStyle = '#020806';
   for (const d of S.dots) bx.fillRect(Math.round(d.x - L), Math.round(d.y - T) + 1, 2, 2);
@@ -1436,7 +1518,8 @@ function render() {
   for (const f of vf) if (f.alert > 0) {
     const px = Math.round(13 * SCALE), sx = (f.x - L) * SCALE, sy = (f.y - T - f.g.W - 22 - Math.abs(Math.sin(G.time * 12)) * 3) * SCALE;
     ctx.globalAlpha = Math.min(1, f.alert * 3); ctx.font = `${px}px Bungee, Impact, sans-serif`;
-    ctx.lineWidth = SCALE * 1.6; ctx.strokeStyle = '#000'; ctx.strokeText('!', sx, sy); ctx.fillStyle = '#ff3b30'; ctx.fillText('!', sx, sy);
+    const mark = f.relentless ? '!!' : '!';
+    ctx.lineWidth = SCALE * 1.6; ctx.strokeStyle = '#000'; ctx.strokeText(mark, sx, sy); ctx.fillStyle = '#ff3b30'; ctx.fillText(mark, sx, sy);
   }
   if (!boss.dead && (boss.state === 'coil') && boss.vis > 0.6) {
     const h = boss.segs[0], px = Math.round(13 * SCALE);
@@ -1445,6 +1528,30 @@ function render() {
   }
   ctx.globalAlpha = 1;
   cam.left = camL; cam.top = camT;
+}
+const bloodCv = document.createElement('canvas'), bloodCx = bloodCv.getContext('2d');
+let bloodImg = null;
+function drawBlood(L, T) {
+  const f = blood.f; if (!f) return;
+  const ox = ((L % 2) + 2) % 2, oy = ((T % 2) + 2) % 2, bw = Math.ceil((viewW + ox) / 2) + 1, bh = Math.ceil((viewH + oy) / 2) + 1;
+  if (bloodCv.width !== bw || bloodCv.height !== bh || !bloodImg) { bloodCv.width = bw; bloodCv.height = bh; bloodImg = bloodCx.createImageData(bw, bh); }
+  const d = bloodImg.data; let any = false;
+  for (let py = 0; py < bh; py++) {
+    const wy = T - oy + py * 2 + 1, gy = clamp(wy / CELL - 0.5, 0, GN - 1.001), iy = gy | 0, fy = gy - iy;
+    for (let px = 0; px < bw; px++) {
+      const o = (py * bw + px) * 4, wx = L - ox + px * 2 + 1, gx = clamp(wx / CELL - 0.5, 0, GN - 1.001), ix = gx | 0, fx = gx - ix;
+      const i = iy * GN + ix, a = f[i], b = f[i + 1], c = f[i + GN], e = f[i + GN + 1];
+      if (a + b + c + e < 0.03) { d[o + 3] = 0; continue; }
+      const v = a + (b - a) * fx + (c - a) * fy + (a - b - c + e) * fx * fy;
+      const q = Math.floor(Math.min(1, v * 0.9) * 5 + bayer((wx - 1) >> 1, (wy - 1) >> 1)) / 5;
+      if (q <= 0) { d[o + 3] = 0; continue; }
+      const t = clamp((v - 0.5) / 2.5, 0, 1);
+      d[o] = 165 - 95 * t; d[o + 1] = 22 - 18 * t; d[o + 2] = 20 - 16 * t; d[o + 3] = q * 220; any = true;
+    }
+  }
+  if (!any) return;
+  bloodCx.putImageData(bloodImg, 0, 0);
+  bx.globalAlpha = 1; bx.drawImage(bloodCv, 0, 0, bw, bh, -ox, -oy, bw * 2, bh * 2);
 }
 function drawBoss(L, T) {
   const n = boss.n;
@@ -1520,7 +1627,13 @@ const sfx = (() => {
     unlock,
     chomp(t) { noise(0.05 + t * 0.03, 0.22 + t * 0.05, 'bandpass', 2200 - t * 220, 500, 1.4); tone('square', 240 - t * 22, 70, 0.06 + t * 0.02, 0.05); if (t >= 3) noise(0.25, 0.2, 'lowpass', 900, 120, 0.8, 0.04); },
     hit(t) { tone('sine', 150, 38, 0.28, 0.55); noise(0.2, 0.32, 'lowpass', 1400, 180, 0.7); if (t >= 5) tone('sawtooth', 90, 30, 0.35, 0.12); },
-    miss() { noise(0.16, 0.12, 'highpass', 2500, 6000, 0.7); },
+    splat(k) {
+      noise(0.14 + k * 0.3, 0.22 + k * 0.32, 'lowpass', 1500 + k * 600, 140, 3);
+      tone('sine', 240 - k * 60, 45, 0.12 + k * 0.22, 0.16 + k * 0.22);
+      noise(0.07, 0.16 + k * 0.1, 'bandpass', 3400, 700, 4, 0.015);
+      if (k > 0.45) noise(0.35 + k * 0.4, 0.12 + k * 0.12, 'bandpass', 500, 120, 1.5, 0.05);
+    },
+    crunch() { noise(0.035, 0.06 + Math.min(0.08, S.dots.length / 6000), 'bandpass', rand(1600, 3400), 700, 2.2); },
     alert() { tone('square', 880, 880, 0.05, 0.06); tone('square', 1320, 1320, 0.07, 0.06, 0.07); },
     scatter() { noise(0.38, 0.28, 'bandpass', 380, 3200, 1.6); },
     levelUp(L) { [0, 4, 7, 12, 16].forEach((n, i) => tone('square', semi(n + L), semi(n + L), 0.11, 0.07, i * 0.065)); tone('triangle', semi(L - 12), semi(L - 12), 0.5, 0.15, 0.3); },
@@ -1618,8 +1731,21 @@ function updateHud(dt) {
   if (bh !== hud.boss) { hud.boss = bh; el.boss.hidden = bh < 0; if (bh >= 0) el.bossFill.style.transform = `scaleX(${bh})`; }
 }
 const mctx = el.mini.getContext('2d');
+const miniBlood = document.createElement('canvas'); miniBlood.width = miniBlood.height = 116;
+const mbx = miniBlood.getContext('2d'), mbImg = mbx.createImageData(116, 116);
+function updateMiniBlood() {
+  const f = blood.f, d = mbImg.data, step = GN / 116; if (!f) return;
+  for (let y = 0; y < 116; y++) for (let x = 0; x < 116; x++) {
+    let v = 0;
+    for (let sy = 0; sy < 2; sy++) for (let sx = 0; sx < 2; sx++) v = Math.max(v, f[Math.floor((y + 0.25 + sy * 0.5) * step) * GN + Math.floor((x + 0.25 + sx * 0.5) * step)]);
+    const o = (y * 116 + x) * 4; d[o] = 210; d[o + 1] = 24; d[o + 2] = 20; d[o + 3] = v < 0.08 ? 0 : Math.min(255, 90 + v * 110);
+  }
+  mbx.putImageData(mbImg, 0, 0);
+}
 function drawMinimap() {
   const N = 232; mctx.imageSmoothingEnabled = false; mctx.drawImage(miniBase, 0, 0);
+  if (frameN % 30 === 0) updateMiniBlood();
+  mctx.drawImage(miniBlood, 0, 0, N, N);
   const k = N / WORLD, pulse = 0.5 + 0.5 * Math.sin(G.time * 4);
   mctx.strokeStyle = boss.dead ? 'rgba(239,230,207,.8)' : `rgba(255,${60 + pulse * 60},40,${0.6 + pulse * 0.4})`; mctx.lineWidth = 3;
   mctx.beginPath(); mctx.arc(CENTER.x * k, CENTER.y * k, (LAGOON_R + 10) * k, 0, TAU); mctx.stroke();
@@ -1639,7 +1765,7 @@ function buildGuide() {
   const lvl = G.mode === 'title' ? 1 : G.level;
   for (let t = 1; t <= 6; t++) {
     const h = document.createElement('div'); h.className = 'tier-h';
-    h.textContent = t === 1 ? 'TIER 1 · ALWAYS EDIBLE' : `TIER ${t} · EAT AT LV ${TIERS[t].eat} · BITES ${t}× IF YOU ARE SMALLER`;
+    h.textContent = t === 1 ? 'TIER 1 · ALWAYS EDIBLE' : `TIER ${t} · EAT AT LV ${TIERS[t].eat} · BITES ${t}×` + (TIERS[t].eat > 3 ? ` · HUNTS LV ${TIERS[t].eat - 3}${TIERS[t].eat > 4 ? ' AND BELOW' : ''} TO DEATH` : '');
     g.appendChild(h);
     for (const sp of SPECIES_BY_TIER[t]) {
       const c = document.createElement('div'); c.className = 'gcard';
@@ -1688,7 +1814,7 @@ function endGame(win) {
   $('endText').textContent = win ? `The anaconda is bones. A swarm of ${S.dots.length} piranhas rules the river.`
     : `${G.lastBiter ? 'A ' + G.lastBiter + ' finished off' : 'Something finished off'} your swarm. At its peak it was ${peak}.`;
   const tm = Math.floor(G.stats.time), mmss = `${Math.floor(tm / 60)}:${String(tm % 60).padStart(2, '0')}`;
-  $('endStats').innerHTML = `<div class="stat"><b>${G.stats.eaten}</b><span>FISH EATEN</span></div><div class="stat"><b>${G.stats.peak}</b><span>PEAK LEVEL</span></div><div class="stat"><b>${mmss}</b><span>TIME</span></div>`;
+  $('endStats').innerHTML = `<div class="stat"><b>${G.stats.eaten}</b><span>FISH EATEN</span></div><div class="stat"><b>${G.stats.peak}</b><span>PEAK LEVEL</span></div><div class="stat"><b>${Math.round(blood.spilled).toLocaleString('en-US')} L</b><span>BLOOD SPILLED</span></div><div class="stat"><b>${mmss}</b><span>TIME</span></div>`;
   $('btnContinue').hidden = !win;
   showScreen('end');
 }
