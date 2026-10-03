@@ -94,10 +94,18 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 #btnScatter.ready{animation:readyGlow 1.6s ease-in-out infinite;}
 @keyframes readyGlow{50%{box-shadow:inset 3px 3px 0 var(--hi), inset -3px -3px 0 var(--lo), 0 4px 0 rgba(0,0,0,.5), 0 0 16px rgba(127,176,74,.7);}}
 
-#hint{position:absolute;left:50%;top:calc(84px + var(--sat));transform:translateX(-50%);max-width:min(560px, calc(100vw - 32px));
-  text-align:center;font-size:12px;line-height:1.5;letter-spacing:.04em;padding:7px 12px;pointer-events:none;opacity:0;transition:opacity .4s;
-  background:rgba(5,10,8,.78);box-shadow:inset 1px 1px 0 var(--hi), inset -1px -1px 0 var(--lo);}
-#hint.on{opacity:1;}
+/* action-movie prompt: letterbox bars, slammed-in metal title, light sweep */
+#cine{position:fixed;inset:0;pointer-events:none;overflow:hidden;}
+.cine-bar{position:absolute;left:0;right:0;height:13vh;background:#000;transform:scaleY(0);}
+.cine-bar.top{top:0;transform-origin:50% 0;} .cine-bar.bot{bottom:0;transform-origin:50% 100%;}
+.cine-txt{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;padding-inline:16px;}
+#cineMain{display:inline-block;opacity:0;font-family:var(--display);font-size:clamp(44px,14vw,120px);line-height:.92;text-wrap:balance;
+  color:#ffd23a;background:linear-gradient(180deg,#fffbe8 0%,#ffe27a 38%,#ff9a1e 56%,#d0200e 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.cine-mw{filter:drop-shadow(0 3px 0 #000) drop-shadow(0 6px 0 rgba(0,0,0,.6)) drop-shadow(0 0 22px rgba(255,70,20,.45));}
+#cineSub{opacity:0;margin-top:12px;font-family:var(--display);font-size:clamp(17px,5vw,38px);letter-spacing:.14em;color:#efe6cf;text-shadow:0 3px 0 #000, 2px 0 0 #000, -2px 0 0 #000, 0 -2px 0 #000;}
+.cine-sweep{position:absolute;top:50%;left:-60%;width:50%;height:clamp(60px,22vw,190px);transform:translateY(-50%) skewX(-24deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);opacity:0;mix-blend-mode:overlay;}
+#flash{position:fixed;inset:0;pointer-events:none;background:#fff;opacity:0;}
 
 #banner{position:fixed;left:0;right:0;top:30%;text-align:center;pointer-events:none;padding-inline:16px;opacity:0;}
 #bannerSub{font-weight:700;font-size:clamp(12px,2.6vw,18px);letter-spacing:.42em;color:var(--bone);text-shadow:0 2px 0 #000;margin-bottom:6px;}
@@ -141,7 +149,6 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
   .rows li{grid-template-columns:96px 1fr;}
   #mini{width:92px;height:92px;}
   #btnScatter{width:78px;height:78px;}
-  #hint{top:calc(168px + var(--sat));}
 }
 @media (prefers-reduced-motion: reduce){
   #meter.max #barFill,#meter.max,#btnScatter.ready,#meter.max #lvNum,#meter.max #lvName,.hunger.s2 #hungerLbl,.hunger.s2 #hungerRate{animation:none;}
@@ -172,11 +179,12 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
     <div class="bar"><div id="bossFill"></div></div>
   </div>
   <button id="btnScatter" aria-label="Scatter the swarm"><span>SCATTER<i>2× TAP</i></span></button>
-  <div id="hint"></div>
 </div>
 
 <div id="banner"><div id="bannerSub"></div><div id="bannerMain"></div></div>
 <div id="vignette"></div>
+<div id="cine"><div class="cine-bar top"></div><div class="cine-bar bot"></div><div class="cine-sweep"></div><div class="cine-txt"><div class="cine-mw"><div id="cineMain"></div></div><div id="cineSub"></div></div></div>
+<div id="flash"></div>
 
 <div id="screenStart" class="screen">
   <div class="card panel">
@@ -984,7 +992,7 @@ function updateHunger(dt) {
   if (!G.hungerOn) {
     if (G.level < 2) return;
     G.hungerOn = true; G.sat = SAT_MAX;
-    setTimeout(() => { if (G.mode === 'play') showHint('Hunger has set in. From now on the swarm starves unless it keeps eating.', 4.5); }, 2400);
+    setTimeout(() => { if (G.mode === 'play') cinematic('HUNGER!', 'EAT TO SURVIVE!'); }, 2400);
   }
   if (G.sat > 0) { G.sat = Math.max(0, G.sat - dt); return; }
   G.hungerAcc += HUNGER[G.level - 1] * dt;
@@ -994,7 +1002,6 @@ function updateHunger(dt) {
     G.blood.push({ x: d.x, y: d.y, vx: rand(-3, 3), vy: rand(-10, -4), life: 0.9, max: 0.9, s: 1, c: '#c4d0c6' });
     G.lastLoss = 'hunger';
   }
-  if (!G.hints.starve) { G.hints.starve = 1; showHint('Starving! Eat something before the swarm wastes away.', 3); }
 }
 // keep the anaconda's lagoon stocked so the fight never starves the swarm
 function spawnLagoonPrey() {
@@ -1027,7 +1034,7 @@ function updateFish(f, dt) {
   const edible = G.level >= f.T.eat && S.alive, T = f.T;
   let desired = f.a, speed = T.cruise, turnRate = T.turn;
   const contact = edible && S.dispT <= 0 && dist < R + fishHalfLen(f) * 0.6 + 2;
-  f.alert = Math.max(0, f.alert - dt);
+  f.alert = Math.max(0, f.alert - dt); if (f.gaveUp) f.gaveUp = Math.max(0, f.gaveUp - dt);
   if (edible && f.state !== 'wander' && f.state !== 'flee' && f.state !== 'caught') f.state = 'flee';
   if (edible) {
     if (contact) {
@@ -1047,14 +1054,13 @@ function updateFish(f, dt) {
     // those bites are enough to finish the swarm, and any hunter tires out if outswum.
     const aggroR = (f.guard ? 70 : 46) + f.tier * 12, giveUpR = aggroR * 2.3;
     const strain = clamp((dist - aggroR * 0.5) / aggroR, 0, 1.6);
-    const tire = () => { f.state = 'tired'; f.st = rand(6, 9); f.lethal = false; floatText(f.x, f.y - f.g.W - 6, 'GAVE UP', '#c9d6cf', 0.8); };
+    const tire = () => { f.state = 'tired'; f.st = rand(6, 9); f.lethal = false; f.gaveUp = 1.8; };
     switch (f.state) {
       case 'wander': case 'flee': case 'caught':
         f.state = 'wander';
         if (!f.calm && S.alive && f.attacks > 0 && dist < aggroR && G.mode === 'play') {
           f.state = 'alert'; f.st = f.seen ? 0.38 : 0.62; f.seen = true; f.alert = 0.9; sfx.alert(f.tier);
           f.dmg = biteDamage(f); f.lethal = isLethal(f); f.stamina = f.lethal ? 9 : 5.5;
-          if (!G.hints.scatter) { G.hints.scatter = 1; showHint('A big fish is coming for you. Double-tap to scatter, or outswim it until it tires.', 4); }
         }
         break;
       case 'alert':
@@ -1142,7 +1148,6 @@ function eatFish(f) {
   G.shake = Math.max(G.shake, f.tier >= 3 ? f.tier * 0.8 : 0);
   sfx.chomp(f.tier); sfx.splat(clamp(f.tier / 6 + S.dots.length / 1400, 0.1, 1));
   if (S.prey === f) S.prey = null;
-  if (!G.hints.ate) { G.hints.ate = 1; showHint('A red skull means too big to eat. It bites once per tier, then leaves. Outswim it and it tires out.', 5); }
 }
 // bites hit harder the more levels short the swarm is
 const levelGap = f => Math.max(1, f.T.eat - G.level);
@@ -1240,10 +1245,7 @@ function updateBoss(dt) {
   const dx = S.x - h.x, dy = S.y - h.y, dist = Math.hypot(dx, dy), R = swarmR(), ph = bossPhase();
   boss.engaged = inLair || (boss.engaged && dS < LAGOON_R + 120);
   // once a max-level swarm enters the lagoon the fight is on, even if bites knock it down a level
-  if (inLair && G.level >= MAX_LEVEL && !boss.unlocked) {
-    boss.unlocked = true;
-    showHint('Keep moving. Sit on the anaconda too long and it coils around you and crushes the swarm.', 5);
-  }
+  if (inLair && G.level >= MAX_LEVEL) boss.unlocked = true;
   const visT = boss.state === 'dive' ? 0.14 : dS < LAGOON_R + 160 ? 1 : 0.32;
   boss.vis += (visT - boss.vis) * Math.min(1, dt * 3);
   boss.hurt = Math.max(0, boss.hurt - dt);
@@ -1278,7 +1280,6 @@ function updateBoss(dt) {
   // linger on the body and it wraps around the swarm
   if (boss.unlocked && touching && boss.contactT > [0, 2.6, 2.0, 1.5][ph] && (boss.state === 'stalk' || boss.state === 'recover')) {
     boss.state = 'squeeze'; boss.st = 2.8; boss.sqX = S.x; boss.sqY = S.y; boss.sqA = Math.atan2(h.y - S.y, h.x - S.x); boss.contactT = 0; sfx.hiss();
-    if (!G.hints.squeeze) { G.hints.squeeze = 1; showHint('It is coiling around you. Swim out of the ring or scatter!', 3.5); }
   }
   switch (boss.state) {
     case 'idle':
@@ -1531,7 +1532,6 @@ function step(dt) {
     const lv = levelFor(S.dots.length);
     if (lv !== G.level) {
       G.level = lv; G.stats.peak = Math.max(G.stats.peak, lv);
-      if (lv === MAX_LEVEL && !G.hints.max) { G.hints.max = 1; setTimeout(() => showHint('MAX MASS. The lagoon at the centre of the map is open. Hunt the anaconda.', 5), 2300); }
     }
     if (S.alive && S.dots.length < DEAD_MASS) {
       S.alive = false; for (const d of S.dots) bleed(d.x, d.y, 4, 3); addBlood(S.x, S.y, 1.5, 20); S.dots = []; sfx.dead(); sfx.splat(0.8);
@@ -1539,7 +1539,7 @@ function step(dt) {
     }
     G.lairWarnT -= dt;
     if (G.level < MAX_LEVEL && !boss.dead && !boss.unlocked && G.lairWarnT <= 0 && Math.hypot(S.x - CENTER.x, S.y - CENTER.y) < LAGOON_R + 420) {
-      G.lairWarnT = 16; showHint('The anaconda’s lagoon is ahead. Come back at LV 10, AMAZON APOCALYPSE.', 4.5);
+      G.lairWarnT = 16;
     }
     G.birdT = (G.birdT || 3) - dt;
     if (G.birdT <= 0) { G.birdT = rand(2.5, 7); sfx.bird(); }
@@ -1681,6 +1681,12 @@ function render() {
     const mark = f.lethal ? '!!' : '!';
     ctx.lineWidth = SCALE * 1.6; ctx.strokeStyle = '#000'; ctx.strokeText(mark, sx, sy); ctx.fillStyle = '#ff3b30'; ctx.fillText(mark, sx, sy);
   }
+  // a fish that gave up the chase says so, riding above it like the alert marks
+  for (const f of vf) if (f.gaveUp > 0) {
+    const px = Math.round(6 * SCALE), sx = (f.x - L) * SCALE, sy = (f.y - T - f.g.W - 14) * SCALE;
+    ctx.globalAlpha = Math.min(1, f.gaveUp * 2); ctx.font = `${px}px Bungee, Impact, sans-serif`;
+    ctx.lineWidth = SCALE * 1.4; ctx.strokeStyle = '#000'; ctx.strokeText('GAVE UP', sx, sy); ctx.fillStyle = '#d6e4dc'; ctx.fillText('GAVE UP', sx, sy);
+  }
   if (!boss.dead && (boss.state === 'coil') && boss.vis > 0.6) {
     const h = boss.segs[0], px = Math.round(13 * SCALE);
     ctx.globalAlpha = 1; ctx.font = `${px}px Bungee, Impact, sans-serif`; ctx.lineWidth = SCALE * 1.6; ctx.strokeStyle = '#000';
@@ -1801,6 +1807,7 @@ const sfx = (() => {
     hiss() { noise(0.8, 0.16, 'highpass', 3500, 5000, 0.4); },
     bird() { if (Math.random() < 0.5) { const f = rand(1800, 2600); tone('sine', f, f * 1.5, 0.09, 0.025); tone('sine', f * 1.1, f * 1.6, 0.08, 0.02, 0.13); } else tone('sine', rand(600, 900), rand(300, 450), 0.25, 0.02); },
     dead() { tone('sawtooth', 220, 40, 1.2, 0.18); noise(1, 0.2, 'lowpass', 800, 80, 0.7); },
+    boom() { tone('sine', 120, 32, 0.9, 0.5); noise(0.5, 0.3, 'lowpass', 2400, 90, 0.8); tone('sawtooth', 70, 38, 0.6, 0.08); },
     win() { [0, 4, 7, 12, 7, 12, 16, 19, 24].forEach((n, i) => tone('square', semi(n), semi(n), 0.16, 0.08, i * 0.11)); },
     toggle() { on = !on; if (master) master.gain.value = on ? 0.5 : 0; return on; },
   };
@@ -1810,7 +1817,7 @@ const sfx = (() => {
 const $ = id => document.getElementById(id);
 const el = { hud: $('hud'), meter: $('meter'), lvNum: $('lvNum'), lvName: $('lvName'), massTxt: $('massTxt'), fill: $('barFill'), ghost: $('barGhost'),
   shine: document.querySelector('.bar-shine'), bar: document.querySelector('#meter .bar'), boss: $('boss'), bossFill: $('bossFill'), scatter: $('btnScatter'),
-  hint: $('hint'), hunger: $('hunger'), hungerLbl: $('hungerLbl'), hungerFill: $('hungerFill'), hungerRate: $('hungerRate'), bossName: $('bossName'), banner: $('banner'), bSub: $('bannerSub'), bMain: $('bannerMain'), vig: $('vignette'), mini: $('mini'), mapWrap: $('mapWrap') };
+  cine: $('cine'), cineMain: $('cineMain'), cineSub: $('cineSub'), flash: $('flash'), hunger: $('hunger'), hungerLbl: $('hungerLbl'), hungerFill: $('hungerFill'), hungerRate: $('hungerRate'), bossName: $('bossName'), banner: $('banner'), bSub: $('bannerSub'), bMain: $('bannerMain'), vig: $('vignette'), mini: $('mini'), mapWrap: $('mapWrap') };
 const hud = { lv: 1, p: 0, ghost: 0, txt: '', cd: -1, boss: -1, hOn: null, hSt: -1, hRate: '', bph: 0 };
 const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 function setLevelVisuals(L) {
@@ -1822,12 +1829,12 @@ function banner(sub, main, color, dur = 2300) {
   el.bSub.textContent = sub; el.bMain.textContent = main; el.banner.style.setProperty('--bc', color);
   el.banner.getAnimations().forEach(a => a.cancel());
   el.banner.animate(reduceMotion ? [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }] : [
-    { opacity: 0, transform: 'scale(2.6)', filter: 'blur(8px)' },
+    { opacity: 0, transform: 'scale(2.6)', filter: 'blur(8px)', easing: 'cubic-bezier(.2,.9,.3,1)' },
     { opacity: 1, transform: 'scale(.9)', filter: 'blur(0)', offset: 0.14 },
     { opacity: 1, transform: 'scale(1.04)', offset: 0.22 },
     { opacity: 1, transform: 'scale(1)', offset: 0.3 },
-    { opacity: 1, transform: 'scale(1)', offset: 0.8 },
-    { opacity: 0, transform: 'translateY(-36px) scale(.96)' }], { duration: dur, easing: 'cubic-bezier(.2,.8,.3,1)' });
+    { opacity: 1, transform: 'scale(1)', offset: 0.8, easing: 'ease-in' },
+    { opacity: 0, transform: 'translateY(-36px) scale(.96)' }], { duration: dur });
 }
 function levelUpFX(L) {
   const col = LEVEL_COLORS[L - 1];
@@ -1860,10 +1867,37 @@ function levelDownFX(L) {
   banner((G.lastLoss === 'hunger' ? 'STARVING · LEVEL ' : 'MASS LOST · LEVEL ') + L, LEVELS[L - 1].name, '#ff6a50', 1800); sfx.levelDown();
 }
 function flashHurt(k) { el.vig.animate([{ opacity: k }, { opacity: 0 }], { duration: 480, easing: 'ease-out' }); }
-let hintTimer = 0;
-function showHint(text, sec) {
-  el.hint.textContent = text; el.hint.classList.add('on');
-  clearTimeout(hintTimer); hintTimer = setTimeout(() => el.hint.classList.remove('on'), sec * 1000);
+// action-movie prompt: bars close in, the title slams down with a flash and a boom, then it all pulls away
+function cinematic(main, sub, dur = 2700) {
+  el.cineMain.textContent = main; el.cineSub.textContent = sub;
+  const bars = el.cine.querySelectorAll('.cine-bar'), sweep = el.cine.querySelector('.cine-sweep');
+  [...bars, sweep, el.cineMain, el.cineSub].forEach(n => n.getAnimations().forEach(a => a.cancel()));
+  const o = { duration: dur, fill: 'none' };
+  if (reduceMotion) {
+    el.cineMain.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], o);
+    el.cineSub.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], o);
+    return;
+  }
+  bars.forEach(b => b.animate([{ transform: 'scaleY(0)', easing: 'cubic-bezier(.2,.9,.3,1)' }, { transform: 'scaleY(1)', offset: 0.08 }, { transform: 'scaleY(1)', offset: 0.86, easing: 'ease-in' }, { transform: 'scaleY(0)' }], o));
+  el.cineMain.animate([
+    { opacity: 0, transform: 'scale(3.2) rotate(-4deg)', filter: 'blur(10px)' },
+    { opacity: 0, transform: 'scale(3.2) rotate(-4deg)', filter: 'blur(10px)', offset: 0.06, easing: 'cubic-bezier(.5,0,.9,.6)' },
+    { opacity: 1, transform: 'scale(.9) rotate(0)', filter: 'blur(0)', offset: 0.13 },
+    { opacity: 1, transform: 'scale(1.05)', filter: 'blur(0)', offset: 0.18 },
+    { opacity: 1, transform: 'scale(1)', filter: 'blur(0)', offset: 0.24 },
+    { opacity: 1, transform: 'scale(1.03)', filter: 'blur(0)', offset: 0.82, easing: 'ease-in' },
+    { opacity: 0, transform: 'scale(1.25, .6) translateX(30px)', filter: 'blur(6px)' }], o);
+  el.cineSub.animate([
+    { opacity: 0, transform: 'translateX(-60vw)', letterSpacing: '.6em' },
+    { opacity: 0, transform: 'translateX(-60vw)', letterSpacing: '.6em', offset: 0.16, easing: 'cubic-bezier(.2,.9,.3,1)' },
+    { opacity: 1, transform: 'translateX(0)', letterSpacing: '.14em', offset: 0.26 },
+    { opacity: 1, transform: 'translateX(0)', offset: 0.82, easing: 'ease-in' },
+    { opacity: 0, transform: 'translateX(40vw)' }], o);
+  sweep.animate([{ left: '-60%', opacity: 0 }, { left: '-60%', opacity: 0, offset: 0.14 }, { left: '-20%', opacity: 1, offset: 0.17 }, { left: '120%', opacity: 1, offset: 0.34 }, { left: '120%', opacity: 0 }], o);
+  setTimeout(() => {
+    el.flash.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 260, easing: 'ease-out' });
+    G.shake = Math.max(G.shake, 9); sfx.boom();
+  }, dur * 0.13);
 }
 function updateHud(dt) {
   const L = G.level, m = S.dots.length;
@@ -1960,10 +1994,10 @@ function buildGuide() {
   c.appendChild(info); g.appendChild(c);
 }
 function showScreen(name) { for (const k in screens) screens[k].hidden = k !== name; }
-function startGame() {
+function startGame(quiet) {
   showScreen(null); el.hud.hidden = false; G.mode = 'play'; sfx.unlock();
   hud.lv = G.level; hud.p = 0; hud.ghost = 0; setLevelVisuals(G.level);
-  showHint('Hold anywhere and the swarm swims toward your thumb. Eat the small fish.', 5);
+  if (!quiet) setTimeout(() => { if (G.mode === 'play') cinematic('USE YOUR THUMBS', 'TO MOVE THE PIRANHAS'); }, 350);
 }
 function newRiver() { resetGame((Math.random() * 1e9) | 0); hud.lv = 1; hud.p = 0; setLevelVisuals(1); }
 function pauseGame(guideOnly) {
@@ -2022,12 +2056,12 @@ el.scatter.addEventListener('pointerdown', e => { e.preventDefault(); e.stopProp
 el.mini.addEventListener('click', () => el.mapWrap.classList.toggle('big'));
 $('btnPause').addEventListener('click', () => { if (G.mode === 'play') pauseGame(false); });
 $('btnSound').addEventListener('click', () => { sfx.unlock(); $('btnSound').classList.toggle('off', !sfx.toggle()); });
-$('btnStart').addEventListener('click', startGame);
+$('btnStart').addEventListener('click', () => startGame());
 $('btnGuide0').addEventListener('click', () => pauseGame(true));
 $('btnResume').addEventListener('click', resumeGame);
 $('btnRestart').addEventListener('click', () => { newRiver(); G.mode = 'play'; showScreen(null); startGame(); });
 $('btnAgain').addEventListener('click', () => { newRiver(); startGame(); });
-$('btnContinue').addEventListener('click', () => { G.mode = 'play'; showScreen(null); showHint('The river is yours. Keep feeding.', 3); });
+$('btnContinue').addEventListener('click', () => { G.mode = 'play'; showScreen(null); });
 window.addEventListener('resize', resize);
 
 /* ================= main loop ================= */
@@ -2054,7 +2088,7 @@ function boot(data) {
     G.stats = data.stats || newStats(); G.hints = data.hints || {}; G.level = levelFor(S.dots.length);
     G.hungerOn = !!data.hungerOn; G.sat = data.sat ?? SAT_MAX;
     boss.hp = data.bossHp || boss.max; if (data.bossDead) { boss.dead = true; boss.deathT = 99; }
-    startGame();
+    startGame(true);
   }
   $('loading').hidden = true;
   try { window.claude?.hot?.snapshot?.(snapshot); } catch (_) { }
