@@ -101,12 +101,38 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 .cine-lines{position:absolute;left:50%;top:50%;width:260vmax;height:260vmax;margin:-130vmax 0 0 -130vmax;opacity:0;
   background:repeating-conic-gradient(from 0deg, transparent 0deg 5deg, rgba(255,240,200,.42) 5deg 6.4deg);
   -webkit-mask-image:radial-gradient(circle, transparent 9%, #000 26%);mask-image:radial-gradient(circle, transparent 9%, #000 26%);}
-.cine-band{position:absolute;left:-10%;right:-10%;top:50%;height:clamp(120px,40vw,300px);margin-top:calc(clamp(120px,40vw,300px) / -2);
-  transform:skewY(-7deg) scaleX(0);opacity:1;background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 2px,transparent 2px 6px),linear-gradient(90deg,transparent,var(--cbc,#c8160c) 10%,var(--cbc,#c8160c) 90%,transparent);
-  box-shadow:0 -5px 0 rgba(0,0,0,.85), 0 5px 0 rgba(0,0,0,.85);}
 #cineKick{display:inline-block;opacity:0;margin-bottom:12px;padding:5px 12px 4px;font-family:var(--pixel);font-weight:700;font-size:clamp(12px,3.6vw,22px);
   letter-spacing:.32em;color:#120202;background:#ffd23a;box-shadow:4px 4px 0 #000;}
 #cineKick:empty{display:none;}
+
+/* gooey blood prompts: an SVG goo filter melts title, drips and splats into one blob of blood */
+.goo{position:fixed;inset:0;pointer-events:none;overflow:hidden;}
+.goo-scene{position:absolute;left:0;right:0;top:46%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;text-align:center;padding-inline:16px;
+  filter:drop-shadow(0 4px 0 #1a0000) drop-shadow(0 0 3px rgba(0,0,0,.75));}
+.goo.small .goo-scene{top:24%;transform:translateY(-50%) rotate(-5deg);}
+.goo-kick{opacity:0;margin-bottom:14px;padding:5px 12px 4px;font-family:var(--pixel);font-weight:700;font-size:clamp(12px,3.6vw,20px);letter-spacing:.34em;
+  color:#ffe8e0;background:#7a0404;box-shadow:3px 3px 0 #000;}
+.goo.small .goo-kick{font-size:clamp(10px,3vw,15px);margin-bottom:8px;}
+.goo-stack{display:grid;position:relative;}
+.goo-stack > *{grid-area:1/1;}
+.goo-wrap{position:relative;filter:url(#goo);}
+.goo.small .goo-wrap{filter:url(#goo-s);}
+.goo-main,.goo-gloss{font-family:var(--display);font-size:clamp(40px,12.5vw,110px);line-height:.95;text-wrap:balance;max-width:min(92vw,1100px);}
+.goo.small .goo-main,.goo.small .goo-gloss{font-size:clamp(30px,9.5vw,74px);}
+.goo-main{position:relative;color:#e8180e;}
+.goo-main span{display:inline-block;}
+.goo-gloss{color:transparent;background:linear-gradient(180deg,transparent 0 14%,rgba(255,215,200,.62) 21%,transparent 34%,transparent 68%,rgba(50,0,0,.4) 100%);
+  -webkit-background-clip:text;background-clip:text;}
+.goo-drips,.goo-splats{position:absolute;inset:0;}
+.goo-drip{position:absolute;top:86%;border-radius:45% 45% 50% 50% / 18% 18% 82% 82%;background:#8e0806;transform-origin:50% 0;transform:scaleY(0);}
+.goo-drop{position:absolute;border-radius:50%;background:#8e0806;opacity:0;}
+.goo-splat{position:absolute;left:50%;top:50%;border-radius:50%;background:#7e0705;transform:scale(0);}
+.goo-sub{opacity:0;margin-top:16px;font-family:var(--display);font-size:clamp(15px,4.4vw,30px);letter-spacing:.2em;color:#ffd9cf;text-shadow:2px 2px 0 #000,-2px 0 0 #000,0 -2px 0 #000;}
+.goo-rain{position:absolute;inset:0;filter:url(#goo-s);}
+.goo-rain i{position:absolute;top:-60px;border-radius:50% 50% 50% 50% / 30% 30% 70% 70%;background:#a90a07;}
+.goo-curtain{position:absolute;left:-6%;right:-6%;top:0;height:36vh;background:#5c0403;filter:url(#goo);transform:translateY(-130%);}
+.goo-curtain i{position:absolute;top:100%;margin-top:-8px;border-radius:0 0 50% 50% / 0 0 70% 70%;background:#5c0403;transform-origin:50% 0;}
+.goo-flood{position:absolute;left:0;right:0;bottom:0;height:100vh;background:rgba(34,0,0,.86);transform:translateY(102%);}
 
 /* 90s arcade-fighter title screen: pixel canvas art, blinking arcade menu, CRT scanlines */
 .title-screen{display:block;padding:0;background:#000;overflow:hidden;touch-action:manipulation;}
@@ -202,8 +228,14 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
 
 <div id="banner"><div id="bannerSub"></div><div id="bannerMain"></div></div>
 <div id="vignette"></div>
-<div id="cine"><div class="cine-lines"></div><div class="cine-band"></div><div class="cine-bar top"></div><div class="cine-bar bot"></div><div class="cine-sweep"></div><div class="cine-txt"><div id="cineKick"></div><div class="cine-mw"><div id="cineMain"></div></div><div id="cineSub"></div></div></div>
+<div id="cine"><div class="cine-lines"></div><div class="cine-bar top"></div><div class="cine-bar bot"></div><div class="cine-sweep"></div><div class="cine-txt"><div id="cineKick"></div><div class="cine-mw"><div id="cineMain"></div></div><div id="cineSub"></div></div></div>
 <div id="flash"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <filter id="goo" x="-30%" y="-40%" width="160%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
+    <feColorMatrix in="b" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="goo-s" x="-30%" y="-40%" width="160%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b"/>
+    <feColorMatrix in="b" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 16 -6" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</svg>
 
 <div id="screenStart" class="screen title-screen">
   <canvas id="titleCv" aria-hidden="true"></canvas>
@@ -957,7 +989,7 @@ function resetGame(seed) {
   genWorld(seed); chunks.clear();
   G.fish = []; G.blood = []; G.rings = []; G.bones = []; G.texts = []; G.zaps = [];
   resetBlood();
-  G.hungerOn = false; G.hungerAcc = 0; G.lastLoss = null; S.slow = 1;
+  G.hungerOn = false; G.hungerAcc = 0; G.spree = 0; G.spreeIdx = 0; G.lastKillT = -99; G.promptBusy = 0; G.lastSpreeWord = ''; G.lastLoss = null; S.slow = 1;
   G.time = 0; G.spawnT = 0; G.shake = 0; G.won = false; G.stats = newStats(); G.hints = {}; G.lairWarnT = 0;
   S.x = startPos.x; S.y = startPos.y; S.vx = S.vy = 0; S.dots = []; S.dispT = 0; S.dispCd = 0; S.regroup = null; S.inv = 0; S.prey = null; S.alive = true;
   addDots(START_MASS, S.x, S.y);
@@ -1181,6 +1213,7 @@ function eatFish(f) {
   G.shake = Math.max(G.shake, f.tier >= 3 ? f.tier * 0.8 : 0);
   sfx.chomp(f.tier); sfx.splat(clamp(f.tier / 6 + S.dots.length / 1400, 0.1, 1));
   if (S.prey === f) S.prey = null;
+  onKill();
 }
 // bites hit harder the more levels short the swarm is
 const levelGap = f => Math.max(1, f.T.eat - G.level);
@@ -1262,7 +1295,7 @@ function updateBlood(dt) {
 function floatText(x, y, txt, col, size = 1) { G.texts.push({ x, y, txt, col, size, life: 1.1, max: 1.1 }); }
 
 /* ================= anaconda ================= */
-const boss = { segs: [], n: 46, sp: 4.3, a: 0, state: 'idle', st: 0, hp: 1500, max: 1500, tx: 0, ty: 0, vis: 0.3, dead: false, engaged: false, hurt: 0,
+const boss = { segs: [], n: 46, sp: 4.3, a: 0, state: 'idle', st: 0, hp: 1350, max: 1350, tx: 0, ty: 0, vis: 0.3, dead: false, engaged: false, hurt: 0,
   strikeA: 0, deathT: 0, unlocked: false, contactT: 0, diveT: 10, nextThrash: 0, thrashA: 0, combo: 0, sqA: 0, sqX: 0, sqY: 0, crushAcc: 0, feedAcc: 0, side: 1 };
 function initBoss() {
   Object.assign(boss, { segs: [], state: 'idle', hp: boss.max, dead: false, engaged: false, vis: 0.3, deathT: 0, unlocked: false, contactT: 0, diveT: 10,
@@ -1372,7 +1405,7 @@ function updateBoss(dt) {
       const inside = Math.hypot(S.x - boss.sqX, S.y - boss.sqY) < rr + 3;
       if (inside && S.dispT <= 0) {
         S.slow = 0.45;
-        boss.crushAcc += [0, 30, 38, 48][ph] * dt;
+        boss.crushAcc += [0, 24, 30, 38][ph] * dt;
         if (boss.crushAcc >= 1) {
           const n = Math.floor(boss.crushAcc); boss.crushAcc -= n;
           removeNearestDots(S.x + rand(-R, R) * 0.6, S.y + rand(-R, R) * 0.6, n); G.lastLoss = 'bite'; G.lastBiter = 'Green Anaconda';
@@ -1398,7 +1431,7 @@ function updateBoss(dt) {
   }
   // body slam: lunging or thrashing through the swarm crushes every piranha in the way
   if (S.alive && S.dispT <= 0 && inLair && (boss.state === 'strike' || boss.state === 'thrash')) {
-    boss.slamAcc = (boss.slamAcc || 0) + 45 * dt;
+    boss.slamAcc = (boss.slamAcc || 0) + 30 * dt;
     let k = 0;
     for (let i = 0; i < 14 && k < boss.slamAcc - 1; i += 2) {
       const s = boss.segs[i], r = segR(i) + 2;
@@ -1413,13 +1446,13 @@ function updateBoss(dt) {
   } else boss.slamAcc = 0;
 }
 function tailWhip(x, y) {
-  const killed = removeNearestDots(x, y, 32);
+  const killed = removeNearestDots(x, y, 26);
   S.inv = 0.4; G.lastLoss = 'bite'; G.lastBiter = 'Green Anaconda';
   bleed(x, y, 10 + killed, 6, 1.4); addBlood(x, y, 0.8, 16);
   floatText(x, y - 8, '-' + killed, '#ff5a4a', 1.3); G.shake = 9; flashHurt(0.8); sfx.hit(5); sfx.splat(0.5);
 }
 function snakeBite(x, y) {
-  const killed = removeNearestDots(x, y, boss.unlocked ? [0, 40, 48, 58][bossPhase()] : 90);
+  const killed = removeNearestDots(x, y, boss.unlocked ? [0, 34, 40, 48][bossPhase()] : 90);
   S.inv = 0.5; G.lastBiter = 'Green Anaconda'; G.lastLoss = 'bite';
   bleed(x, y, 14 + killed, 6, 1.5); addBlood(x, y, 1 + killed * 0.04, 18);
   floatText(x, y - 8, '-' + killed, '#ff5a4a', 1.5); G.shake = 12; flashHurt(1); sfx.hit(6); sfx.splat(0.6);
@@ -2089,8 +2122,7 @@ function levelUpFX(L) {
         { duration: rand(500, 900), easing: 'cubic-bezier(.2,.7,.4,1)' }).onfinish = () => s.remove();
     }
   }
-  if (L === MAX_LEVEL) cinematic(LEVELS[L - 1].name, 'LEVEL 10 · MAX MASS', { kicker: 'MAXIMUM!', color: '#ff3a22', band: BAND_COLORS[9], lines: true, dur: 3600, flashes: 3 });
-  else cinematic(LEVELS[L - 1].name, 'LEVEL ' + L, { kicker: 'LEVEL UP!', color: col, band: BAND_COLORS[L - 1], lines: true, dur: 2600 });
+  levelGoo(L);
   G.rings.push({ x: S.x, y: S.y, r: swarmR(), vr: 170, life: 0.7, max: 0.7, c: col });
   G.rings.push({ x: S.x, y: S.y, r: swarmR() * 0.5, vr: 110, life: 0.6, max: 0.6, c: '#ffffff' });
   for (const d of S.dots) { const ex = d.x - S.x, ey = d.y - S.y, l = Math.hypot(ex, ey) || 1; d.vx += ex / l * 60; d.vy += ey / l * 60; }
@@ -2104,23 +2136,20 @@ function levelDownFX(L) {
 }
 function flashHurt(k) { el.vig.animate([{ opacity: k }, { opacity: 0 }], { duration: 480, easing: 'ease-out' }); }
 // action-movie prompt: bars close in, the title slams down with a flash and a boom, then it all pulls away.
-// o: { kicker, color (title gradient + band), band, lines, dur, flashes }
+// o: { kicker, color (title gradient), lines, dur, flashes }
 function darken(hex, k) { const [r, g, b] = rgb(hex); return `rgb(${r * k + 58 * (1 - k) | 0},${g * k + 8 * (1 - k) | 0},${b * k + 4 * (1 - k) | 0})`; }
-const BAND_COLORS = ['#c88a10', '#d89a10', '#dc8a0e', '#e0760c', '#e2620c', '#e0500c', '#d8400a', '#cc300a', '#bc200a', '#a80c08'];
 function cinematic(main, sub, o = {}) {
   const dur = o.dur || 2700;
   el.cineMain.textContent = main; el.cineSub.textContent = sub; el.cineKick.textContent = o.kicker || '';
   el.cineMain.style.backgroundImage = o.color ? `linear-gradient(180deg,#ffffff 0%,${o.color} 40%,${darken(o.color, 0.55)} 100%)` : '';
-  el.cine.style.setProperty('--cbc', o.band && typeof o.band === 'string' ? o.band : '#c8160c');
-  const bars = el.cine.querySelectorAll('.cine-bar'), sweep = el.cine.querySelector('.cine-sweep'), lines = el.cine.querySelector('.cine-lines'), band = el.cine.querySelector('.cine-band');
-  [...bars, sweep, lines, band, el.cineMain, el.cineSub, el.cineKick].forEach(n => n.getAnimations().forEach(a => a.cancel()));
+  G.promptBusy = G.time + dur / 1000;
+  const bars = el.cine.querySelectorAll('.cine-bar'), sweep = el.cine.querySelector('.cine-sweep'), lines = el.cine.querySelector('.cine-lines');
+  [...bars, sweep, lines, el.cineMain, el.cineSub, el.cineKick].forEach(n => n.getAnimations().forEach(a => a.cancel()));
   const t = { duration: dur, fill: 'none' };
   const fade = [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }];
   if (reduceMotion) { [el.cineMain, el.cineSub, el.cineKick].forEach(n => n.animate(fade, t)); return; }
   const EO = 'cubic-bezier(.2,.9,.3,1)';
   bars.forEach(b => b.animate([{ transform: 'scaleY(0)', easing: EO }, { transform: 'scaleY(1)', offset: 0.08 }, { transform: 'scaleY(1)', offset: 0.86, easing: 'ease-in' }, { transform: 'scaleY(0)' }], t));
-  if (o.band) band.animate([{ transform: 'skewY(-7deg) scaleX(0)' }, { transform: 'skewY(-7deg) scaleX(0)', offset: 0.08, easing: EO }, { transform: 'skewY(-7deg) scaleX(1)', offset: 0.16 },
-    { transform: 'skewY(-7deg) scaleX(1)', offset: 0.84, easing: 'ease-in' }, { transform: 'skewY(-7deg) scaleX(1.4) translateX(60%)', opacity: 0 }], t);
   if (o.lines) lines.animate([{ opacity: 0, transform: 'rotate(0deg) scale(1.3)' }, { opacity: 1, offset: 0.12 }, { opacity: 0.8, transform: 'rotate(14deg) scale(1)', offset: 0.85 }, { opacity: 0, transform: 'rotate(16deg) scale(.95)' }], t);
   el.cineKick.animate([{ opacity: 0, transform: 'translateY(-30px) scale(.6)' }, { opacity: 0, offset: 0.1, easing: EO }, { opacity: 1, transform: 'translateY(0) scale(1)', offset: 0.18 },
     { opacity: 1, transform: 'translateY(0) scale(1)', offset: 0.82, easing: 'ease-in' }, { opacity: 0, transform: 'translateY(-20px)' }], t);
@@ -2144,6 +2173,124 @@ function cinematic(main, sub, o = {}) {
     G.shake = Math.max(G.shake, 9); sfx.boom();
   }, dur * 0.13 + i * 260);
 }
+/* ---------- gooey blood prompts ---------- */
+const LEVEL_ENTRY = { 2: 'drop', 3: 'slide', 4: 'punch', 5: 'spin', 6: 'stamp', 7: 'shatter', 8: 'curtain', 9: 'quake', 10: 'flood' };
+const EO2 = 'cubic-bezier(.2,.9,.3,1)';
+function cineBars(dur) {
+  if (reduceMotion) return;
+  el.cine.querySelectorAll('.cine-bar').forEach(b => { b.getAnimations().forEach(a => a.cancel());
+    b.animate([{ transform: 'scaleY(0)', easing: EO2 }, { transform: 'scaleY(1)', offset: 0.08 }, { transform: 'scaleY(1)', offset: 0.86, easing: 'ease-in' }, { transform: 'scaleY(0)' }], { duration: dur }); });
+}
+// entrance keyframes for the title block, and the offset where it lands
+function gooEntry(type, root) {
+  switch (type) {
+    case 'drop': return [[{ transform: 'translateY(-70vh)', easing: 'cubic-bezier(.5,0,1,.5)' }, { transform: 'translateY(0) scale(1.12,.8)', offset: 0.14 }, { transform: 'translateY(-16px) scale(.96,1.05)', offset: 0.2 }, { transform: 'none', offset: 0.25 }], 0.14];
+    case 'slide': return [[{ transform: 'translateX(-130vw) skewX(35deg)', easing: EO2 }, { transform: 'translateX(4vw) skewX(-12deg)', offset: 0.14 }, { transform: 'none', offset: 0.22 }], 0.14];
+    case 'spin': return [[{ transform: 'rotate(-420deg) scale(0)', easing: EO2 }, { transform: 'rotate(8deg) scale(1.15)', offset: 0.16 }, { transform: 'none', offset: 0.24 }], 0.16];
+    case 'stamp': return [[{ transform: 'scale(2.6)', opacity: 0 }, { transform: 'scale(.9)', opacity: 1, offset: 0.1 }, { transform: 'none', offset: 0.14 }, { transform: 'none', offset: 0.2 },
+      { transform: 'scale(1.35) rotate(-3deg)', offset: 0.24 }, { transform: 'scale(.92)', offset: 0.28 }, { transform: 'none', offset: 0.33 }], 0.1];
+    case 'quake': {
+      const k = [{ transform: 'scale(3.5)', opacity: 0 }, { transform: 'scale(3.5)', opacity: 0, offset: 0.05, easing: 'cubic-bezier(.5,0,.9,.6)' }, { transform: 'scale(.9)', opacity: 1, offset: 0.12 }];
+      for (let i = 0; i < 12; i++) k.push({ transform: `translate(${rand(-14, 14)}px,${rand(-10, 10)}px) rotate(${rand(-3, 3)}deg)`, offset: 0.14 + i * 0.03 });
+      k.push({ transform: 'none', offset: 0.52 }); return [k, 0.12];
+    }
+    case 'curtain': return [[{ transform: 'scale(0)', opacity: 0 }, { transform: 'scale(0)', opacity: 0, offset: 0.16, easing: EO2 }, { transform: 'scale(1.12)', opacity: 1, offset: 0.22 }, { transform: 'none', offset: 0.28 }], 0.2];
+    case 'flood': return [[{ transform: 'translateY(40vh) scale(.6)', opacity: 0 }, { transform: 'translateY(40vh) scale(.6)', opacity: 0, offset: 0.16, easing: EO2 }, { transform: 'translateY(-10px) scale(1.15)', opacity: 1, offset: 0.24 }, { transform: 'none', offset: 0.3 }], 0.22];
+    case 'shatter': return [[{ opacity: 1 }, { opacity: 1, offset: 0.2 }], 0.2];
+    default: return [[{ transform: 'scale(4)', opacity: 0 }, { transform: 'scale(4)', opacity: 0, offset: 0.06, easing: 'cubic-bezier(.5,0,.9,.6)' }, { transform: 'scale(.88)', opacity: 1, offset: 0.14 }, { transform: 'scale(1.06)', offset: 0.19 }, { transform: 'none', offset: 0.25 }], 0.14];
+  }
+}
+// o: { kicker, main, sub, entry, k (gore 1..10), dur, drips, splats, rain, curtain, flood, small }
+function gooPrompt(o) {
+  const dur = o.dur, k = o.k;
+  const root = document.createElement('div'); root.className = 'goo' + (o.small ? ' small' : '');
+  root.innerHTML = '<div class="goo-curtain"></div><div class="goo-flood"></div><div class="goo-rain"></div><div class="goo-scene"><div class="goo-kick"></div><div class="goo-stack"><div class="goo-wrap"><div class="goo-splats"></div><div class="goo-main"></div><div class="goo-drips"></div></div><div class="goo-gloss"></div></div><div class="goo-sub"></div></div>';
+  document.body.insertBefore(root, screens.start);
+  setTimeout(() => root.remove(), dur + 80);
+  const q = s => root.querySelector(s), kick = q('.goo-kick'), main = q('.goo-main'), gloss = q('.goo-gloss'), subEl = q('.goo-sub'), stack = q('.goo-stack');
+  kick.textContent = o.kicker || ''; subEl.textContent = o.sub || ''; gloss.textContent = o.main;
+  const shatter = o.entry === 'shatter';
+  if (shatter) main.innerHTML = [...o.main].map(c => c === ' ' ? ' ' : `<span>${c}</span>`).join(''); else main.textContent = o.main;
+  const t = { duration: dur };
+  if (reduceMotion) { root.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], t); [kick, subEl].forEach(n => n.style.opacity = 1); return; }
+  const [frames, slam] = gooEntry(o.entry, root);
+  // every entrance ends by melting down the screen
+  stack.animate([...frames, { transform: 'none', opacity: 1, offset: 0.84, easing: 'ease-in' }, { transform: 'translateY(34px) scaleY(1.2)', opacity: 0 }], t);
+  if (shatter) {
+    main.querySelectorAll('span').forEach((sp, i) => sp.animate([
+      { transform: `translate(${rand(-60, 60)}vw,${rand(-50, 50)}vh) rotate(${rand(-540, 540)}deg) scale(${rand(0.3, 3)})`, opacity: 0, easing: EO2 },
+      { opacity: 1, offset: 0.04 }, { transform: 'none', offset: Math.min(0.3, 0.1 + i * 0.012) }, { transform: 'none' }], t));
+    gloss.animate([{ opacity: 0 }, { opacity: 0, offset: 0.3 }, { opacity: 1, offset: 0.36 }, { opacity: 1 }], t);
+  }
+  kick.animate([{ opacity: 0, transform: 'translateY(-30px) scale(.6)' }, { opacity: 0, offset: slam, easing: EO2 }, { opacity: 1, transform: 'none', offset: slam + 0.06 }, { opacity: 1, transform: 'none', offset: 0.82 }, { opacity: 0, transform: 'translateY(-16px)' }], t);
+  subEl.animate([{ opacity: 0, transform: 'translateX(-60vw)', letterSpacing: '.6em' }, { opacity: 0, transform: 'translateX(-60vw)', offset: slam + 0.04, easing: EO2 }, { opacity: 1, transform: 'none', letterSpacing: '.2em', offset: slam + 0.13 }, { opacity: 1, offset: 0.82 }, { opacity: 0, transform: 'translateY(20px)' }], t);
+  // blood splats burst out behind the letters and melt into them
+  const box = main.getBoundingClientRect(), hw = box.width / 2, hh = box.height / 2, splats = q('.goo-splats');
+  for (let i = 0; i < o.splats; i++) {
+    const s = rand(6, 12 + k * 1.4), a = Math.random() * TAU, r = rand(0.9, 1.15 + k * 0.035), e = document.createElement('i');
+    const dx = Math.cos(a) * (hw * r + s * 0.4), dy = Math.sin(a) * (hh * r + s * 0.6);
+    e.className = 'goo-splat'; e.style.width = e.style.height = s + 'px'; e.style.margin = `${-s / 2}px 0 0 ${-s / 2}px`; splats.appendChild(e);
+    const at = slam + rand(0, 0.03);
+    e.animate([{ transform: 'scale(0)' }, { transform: 'scale(0)', offset: at, easing: 'ease-out' }, { transform: `translate(${dx}px,${dy}px) scale(1.25)`, offset: at + 0.05 },
+      { transform: `translate(${dx * 1.06}px,${dy * 1.06 + 8}px) scale(1)`, offset: 0.84 }, { transform: `translate(${dx * 1.06}px,${dy * 1.06 + 30}px) scale(.6)`, opacity: 0 }], t);
+  }
+  // drips run down from the letters, some let go of a drop
+  const drips = q('.goo-drips');
+  for (let i = 0; i < o.drips; i++) {
+    const w = rand(6, 11 + k * 0.6), h = rand(16, 26 + k * 11), e = document.createElement('i');
+    e.className = 'goo-drip'; e.style.left = rand(3, 95) + '%'; e.style.width = w + 'px'; e.style.height = h + 'px'; drips.appendChild(e);
+    const at = slam + rand(0.02, 0.12), full = Math.min(0.8, at + rand(0.2, 0.45));
+    e.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(0)', offset: at, easing: 'ease-in' }, { transform: 'scaleY(1)', offset: full }, { transform: 'scaleY(1.2)' }], t);
+    if (Math.random() < 0.4) {
+      const d = document.createElement('i'), ds = w * 0.8;
+      d.className = 'goo-drop'; d.style.left = e.style.left; d.style.top = `calc(86% + ${h}px)`; d.style.width = d.style.height = ds + 'px'; drips.appendChild(d);
+      d.animate([{ opacity: 0 }, { opacity: 0, offset: full, easing: 'ease-in' }, { opacity: 1, transform: 'translateY(0)', offset: full + 0.01 }, { opacity: 0, transform: `translateY(${rand(90, 240)}px) scaleY(1.4)`, offset: Math.min(1, full + 0.25) }], t);
+    }
+  }
+  // blood rain from the top of the screen
+  const rain = q('.goo-rain');
+  for (let i = 0; i < (o.rain || 0); i++) {
+    const e = document.createElement('i'), h = rand(14, 42);
+    e.style.left = rand(0, 100) + '%'; e.style.width = rand(3, 7) + 'px'; e.style.height = h + 'px'; rain.appendChild(e);
+    e.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${innerHeight + 120}px)` }], { duration: rand(700, 1300), delay: rand(slam * dur, dur * 0.7), easing: 'ease-in', fill: 'both' });
+  }
+  if (o.curtain) {
+    const c = q('.goo-curtain');
+    for (let i = 0; i < 26; i++) { const e = document.createElement('i'), w = rand(14, 40); e.style.left = rand(0, 100) + '%'; e.style.width = w + 'px'; e.style.height = rand(20, 120) + 'px'; c.appendChild(e);
+      e.animate([{ transform: 'scaleY(.2)' }, { transform: 'scaleY(.2)', offset: 0.1 }, { transform: 'scaleY(1)', offset: 0.5 }, { transform: 'scaleY(1.3)' }], t); }
+    c.animate([{ transform: 'translateY(-130%)' }, { transform: 'translateY(0)', offset: 0.16, easing: 'ease-out' }, { transform: 'translateY(0)', offset: 0.7, easing: 'ease-in' }, { transform: 'translateY(-130%)', offset: 0.92 }, { transform: 'translateY(-130%)' }], t);
+  }
+  if (o.flood) q('.goo-flood').animate([{ transform: 'translateY(102%)' }, { transform: 'translateY(0)', offset: 0.2, easing: 'ease-out' }, { transform: 'translateY(0)', offset: 0.76, easing: 'ease-in' }, { transform: 'translateY(102%)' }], t);
+  // the hit: red wash, shake, a wet boom
+  setTimeout(() => {
+    el.vig.animate([{ opacity: Math.min(1, 0.3 + k * 0.07) }, { opacity: 0 }], { duration: 650, easing: 'ease-out' });
+    if (k >= 6) el.flash.animate([{ opacity: 0.35 }, { opacity: 0 }], { duration: 220 });
+    G.shake = Math.max(G.shake, o.small ? 5 : 6 + k); sfx.boom(); sfx.splat(Math.min(1, 0.3 + k * 0.07));
+    if (o.entry === 'stamp') setTimeout(() => { G.shake = Math.max(G.shake, 10); sfx.boom(); }, dur * 0.14);
+  }, dur * slam);
+}
+function levelGoo(L) {
+  const dur = L === MAX_LEVEL ? 3800 : 2700;
+  cineBars(dur); G.promptBusy = G.time + dur / 1000;
+  gooPrompt({ kicker: L === MAX_LEVEL ? 'MAXIMUM MASS' : 'LEVEL UP', main: LEVELS[L - 1].name, sub: 'LEVEL ' + L, entry: LEVEL_ENTRY[L] || 'punch', k: L, dur,
+    drips: 4 + L * 3, splats: 4 + L * 5, rain: L >= 5 ? (L - 4) * 12 : 0, curtain: L >= 8, flood: L === MAX_LEVEL });
+}
+/* ---------- kill sprees ---------- */
+const SPREE_AT = [5, 10, 15, 20, 30, 40, 50, 75, 100];
+const SPREE_WORDS = [['BLOODTHIRSTY', 'FEEDING FRENZY', 'CARNAGE', 'NO MERCY'], ['RAMPAGE', 'RIVER OF BLOOD', 'MEAT GRINDER', 'SLAUGHTER'], ['MASSACRE', 'BLOOD STORM', 'UNSTOPPABLE', 'TOTAL CARNAGE']];
+const spreeNeed = i => i < SPREE_AT.length ? SPREE_AT[i] : 100 + (i - SPREE_AT.length + 1) * 25;
+function onKill() {
+  G.spree = G.time - G.lastKillT < 3 ? G.spree + 1 : 1; G.lastKillT = G.time;
+  if (G.spree === 1) G.spreeIdx = 0;
+  if (G.spree < spreeNeed(G.spreeIdx)) return;
+  const i = G.spreeIdx++;
+  if (G.time < G.promptBusy || G.mode !== 'play') return;
+  const pool = SPREE_WORDS[i < 3 ? 0 : i < 6 ? 1 : 2].filter(w => w !== G.lastSpreeWord), word = pick(pool);
+  G.lastSpreeWord = word; G.promptBusy = G.time + 1.5;
+  gooPrompt({ small: true, kicker: G.spree + ' KILL SPREE', main: word, entry: pick(['punch', 'slide', 'spin', 'drop']), k: Math.min(10, 3 + i), dur: 1700,
+    drips: 5 + i * 2, splats: 8 + i * 4, rain: i >= 6 ? 16 : 0 });
+}
+
 function updateHud(dt) {
   const L = G.level, m = S.dots.length;
   // at max level the bar shows mass against the cap, so every loss still chips it
