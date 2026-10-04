@@ -380,6 +380,10 @@ SPECIES.forEach(sp => SPECIES_BY_TIER[sp.tier].push(sp));
 const WORLD = 3600, CELL = 4, GN = WORLD / CELL, CH = 128, NCH = Math.ceil(WORLD / CH);
 const CENTER = { x: WORLD / 2, y: WORLD / 2 };
 const LAGOON_R = 270, MARGIN = 44;
+// how far into the anaconda's murk a point is: 0 out in the clear rivers, 1 at the lagoon
+const murkAt = (x, y) => clamp((0.62 - Math.hypot(x - CENTER.x, y - CENTER.y) / (WORLD / 2)) / 0.45, 0, 1);
+// how deep a point sits on the descent toward the lagoon: 0 at the outer river mouths, 1 at the lagoon rim
+const descentAt = (x, y) => clamp((0.85 - Math.hypot(x - CENTER.x, y - CENTER.y) / (WORLD / 2)) / 0.7, 0, 1);
 let grid = null;            // signed distance-ish to shore in px (positive = water)
 let rivers = [], guardSpots = [], startPos = null;
 
@@ -563,7 +567,7 @@ function buildMinimap() {
     const wx = (x + 0.5) * WORLD / N, wy = (y + 0.5) * WORLD / N, dep = depthAt(wx, wy), i = (y * N + x) * 4;
     const lair = Math.hypot(wx - CENTER.x, wy - CENTER.y) < LAGOON_R + 20;
     let col;
-    if (dep > 0) col = lair ? (dep > 30 ? '#5a2620' : '#7a3a2c') : dep > 22 ? '#2c7466' : dep > 8 ? '#3f8d76' : '#62a884';
+    if (dep > 0) col = lair ? (dep > 30 ? '#5a2620' : '#7a3a2c') : murkAt(wx, wy) > bayer(x, y) * 0.9 + 0.05 ? (dep > 22 ? '#2a4a3a' : dep > 8 ? '#3a5a44' : '#4e6a50') : dep > 22 ? '#2c7466' : dep > 8 ? '#3f8d76' : '#62a884';
     else col = dep > -8 ? '#3a4a26' : (bayer(x, y) < 0.5 ? '#16261a' : '#1b2d1c');
     const [r, g, b] = rgb(col); d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
   }
@@ -573,6 +577,7 @@ function buildMinimap() {
 const P = s => s.map(rgb);
 const PAL = {
   water: P(['#5a9874', '#468668', '#35735d', '#296352', '#1f5248']),
+  murk: P(['#4e5a3e', '#414e36', '#35422e', '#2b3727', '#222c20']),
   lagoon: P(['#56664a', '#46563f', '#384736', '#2c3a2d', '#223024']),
   shore: rgb('#93b98c'),
   mud: P(['#7d6c47', '#6a5a3b', '#57482f']),
@@ -620,7 +625,7 @@ function renderChunk(cx, cy) {
       if (v > 0) {
         anyWater = true;
         const ex = wx - CENTER.x, ey = wy - CENTER.y, dc = Math.sqrt(ex * ex + ey * ey);
-        const pal = clamp((LAGOON_R + 70 - dc) / 90, 0, 1) > b ? PAL.lagoon : PAL.water;
+        const pal = clamp((LAGOON_R + 70 - dc) / 90, 0, 1) > b ? PAL.lagoon : murkAt(wx, wy) * 0.8 > bayer(wx + 2, wy + 1) ? PAL.murk : PAL.water;
         if (v < 1.3) col = b < 0.7 ? PAL.shore : pal[0];
         else {
           const tex = vnoise(wx / 38, wy / 38, 3);
@@ -1021,6 +1026,8 @@ function chooseTier(x, y, edibleOnly) {
     const he = highestEdibleTier();
     if (t === he) k *= 2; else if (t < he - 1) k *= 0.45;
     if (edibleOnly && TIERS[t].eat > G.level) k = 0;
+    // the closer to the anaconda, the more of the big hunters
+    if (TIERS[t].eat > G.level) k *= 1 + 2 * descentAt(x, y);
     w[t] = k; sum += k;
   }
   if (sum <= 0) return 1;
@@ -1059,7 +1066,7 @@ function updateHunger(dt) {
   if (!G.hungerOn) {
     if (G.level < 2) return;
     G.hungerOn = true;
-    setTimeout(() => { if (G.mode === 'play') { cinematic('HUNGER!', 'EAT TO SURVIVE!'); slowMo(0.8, 0.5); } }, 3000);
+    setTimeout(() => queuePrompt('hunger', () => { cinematic('HUNGER!', 'EAT TO SURVIVE!'); slowMo(0.8, 0.5); }), 900);
   }
   G.hungerAcc += HUNGER[G.level - 1] * dt;
   while (G.hungerAcc >= 1 && S.dots.length) {
@@ -1067,6 +1074,36 @@ function updateHunger(dt) {
     const d = S.dots.pop();
     G.blood.push({ x: d.x, y: d.y, vx: rand(-3, 3), vy: rand(-10, -4), life: 0.9, max: 0.9, s: 1, c: '#c4d0c6' });
     G.lastLoss = 'hunger';
+  }
+}
+// Key fish are the tier that actually levels the swarm. They live deeper toward the lagoon: once the
+// swarm is deep enough for its level, keep a couple within reach, placed further in, often guarded.
+function spawnKeyFish() {
+  const kt = highestEdibleTier();
+  if (kt < 2 || kt >= 6 || zoneMaxTier(S.x, S.y) < kt - 1) return;
+  let n = 0;
+  for (const f of G.fish) if (!f.dead && f.tier === kt && !f.leader && Math.abs(f.x - S.x) < 520 && Math.abs(f.y - S.y) < 520) n++;
+  if (n >= 2) return;
+  const toC = Math.atan2(CENTER.y - S.y, CENTER.x - S.x);
+  for (let tries = 0; tries < 14; tries++) {
+    const a = toC + rand(-1.1, 1.1), r = rand(170, viewHalfDiag() + 320), x = S.x + Math.cos(a) * r, y = S.y + Math.sin(a) * r;
+    if (x < 100 || y < 100 || x > WORLD - 100 || y > WORLD - 100 || Math.hypot(x - CENTER.x, y - CENTER.y) < LAGOON_R + 40) continue;
+    if (Math.abs(x - cam.x) < viewW / 2 + 14 && Math.abs(y - cam.y) < viewH / 2 + 14) continue;
+    if (zoneMaxTier(x, y) < kt) continue;
+    const sp = pick(SPECIES_BY_TIER[kt]);
+    if (depthAt(x, y) < SPR[sp.id].g.W + 4) continue;
+    const kf = spawnFish(sp, x, y); kf.key = true;
+    // the deeper the key fish, the likelier a bigger hunter is circling it
+    const D = descentAt(x, y);
+    if (Math.random() < 0.15 + D * 0.7) {
+      const gt = Math.min(6, kt + (Math.random() < D ? 2 : 1));
+      for (let k = 0; k < 8 && gt > kt; k++) {
+        const ga = Math.random() * TAU, gr = rand(45, 85), ex = x + Math.cos(ga) * gr, ey = y + Math.sin(ga) * gr, gsp = pick(SPECIES_BY_TIER[gt]);
+        if (depthAt(ex, ey) < SPR[gsp.id].g.W + 4) continue;
+        spawnFish(gsp, ex, ey, { home: { x, y }, leash: 95 }); break;
+      }
+    }
+    return;
   }
 }
 // keep the anaconda's lagoon stocked so the fight never starves the swarm
@@ -1111,9 +1148,10 @@ function updateFish(f, dt) {
       addBlood(f.x, f.y, dt * (0.5 + f.tier * 0.45), f.g.W * 1.4 + 3);
       if (!S.prey || S.prey.dead || Math.hypot(S.prey.x - S.x, S.prey.y - S.y) > dist) S.prey = f;
       if (f.hp <= 0) { eatFish(f); return; }
-    } else if (dist < 40 + R + f.g.L * 0.6) {
+    } else if (dist < 40 + R + f.g.L * 0.6 + (f.fD = descentAt(f.x, f.y)) * 40) {
+      // prey deep in the murk spooks earlier and bolts faster
       f.state = 'flee'; desired = Math.atan2(-dy, -dx); f.fleeT = (f.fleeT || 0) + dt;
-      speed = T.flee * (f.fleeT > 1.8 ? 0.72 : 1);
+      speed = T.flee * (1 + 0.22 * f.fD) * (f.fleeT > 1.8 ? 0.72 : 1);
     } else { f.state = 'wander'; f.fleeT = Math.max(0, (f.fleeT || 0) - dt * 0.5); }
   } else {
     // too big to eat: it bites once per tier, then leaves. It hunts to death only when
@@ -1589,7 +1627,7 @@ function step(dt) {
   for (let i = 0; i < G.fish.length; i++) { const f = G.fish[i]; if (!f.dead) updateFish(f, dt); }
   updateBoss(dt);
   updateBlood(dt);
-  if (G.mode === 'play') updateHunger(dt);
+  if (G.mode === 'play') { updateHunger(dt); pumpPrompts(); }
   if (S.prey && !S.prey.dead && G.mode === 'play') {
     G.crunchT = (G.crunchT || 0) - dt;
     if (G.crunchT <= 0) { G.crunchT = rand(0.06, 0.13); sfx.crunch(); }
@@ -1609,6 +1647,7 @@ function step(dt) {
     if (G.mode === 'play' && prey < 4) spawnAround(false, true);
     else if (n < 60) spawnAround(false);
     if (G.mode === 'play' && boss.unlocked && !boss.dead) spawnLagoonPrey();
+    if (G.mode === 'play') spawnKeyFish();
   }
   const far = viewHalfDiag() + 520;
   G.fish = G.fish.filter(f => !f.dead && (f.guard || Math.hypot(f.x - S.x, f.y - S.y) < far));
@@ -1744,6 +1783,14 @@ function render() {
     let x = z.x, y = z.y, a = z.a;
     for (let s = 0; s < z.len; s += 2) { a += rand(-0.9, 0.9); x += Math.cos(a) * 2; y += Math.sin(a) * 2; bx.fillRect(Math.round(x - L), Math.round(y - T), 1, 1); }
   }
+  // murk: the water closes in around the swarm on the way to the lagoon
+  const fog = G.mode === 'title' ? 0 : Math.min(murkAt(S.x, S.y), boss.engaged ? 0.75 : 1), clear = 340 - 210 * fog;
+  G.clearR = fog > 0.02 ? clear : 1e9;
+  if (fog > 0.02) {
+    const fx = S.x - L, fy = S.y - T, fg = bx.createRadialGradient(fx, fy, clear * 0.45, fx, fy, clear);
+    fg.addColorStop(0, 'rgba(18,22,13,0)'); fg.addColorStop(1, `rgba(18,22,13,${(0.88 * fog).toFixed(3)})`);
+    bx.globalAlpha = 1; bx.fillStyle = fg; bx.fillRect(0, 0, viewW, viewH);
+  }
   // sunlight glints on the surface
   bx.fillStyle = 'rgba(200,236,216,.55)';
   const SG = 18;
@@ -1756,12 +1803,12 @@ function render() {
   }
   for (const [c, cx, cy] of vis) bx.drawImage(c.over, cx * CH - L, cy * CH - T);
   // faint ghost of everything under pads and canopy, so nothing important hides completely
-  for (const f of vf) if (f.tier >= 2) drawRot(SPR[f.sp.id].tint[f.look][Math.floor(f.frame)], f.x, f.y, f.a, f.g, 0.22);
+  for (const f of vf) if (f.tier >= 2 && Math.hypot(f.x - S.x, f.y - S.y) < G.clearR * 0.8) drawRot(SPR[f.sp.id].tint[f.look][Math.floor(f.frame)], f.x, f.y, f.a, f.g, 0.22);
   drawDots(L, T, 0.42);
   // red skulls over fish that are too big to eat
   if (G.mode === 'play') for (const f of vf) {
     if (G.level >= f.T.eat || f.calm) continue;
-    const dd = Math.hypot(f.x - S.x, f.y - S.y); if (dd > 230) continue;
+    const dd = Math.hypot(f.x - S.x, f.y - S.y); if (dd > Math.min(230, G.clearR * 1.05)) continue;
     const sx = Math.round(f.x - L) - 2, sy = Math.round(f.y - T - f.g.W - 10 + Math.sin(G.time * 5 + f.x) * 1);
     const hot = f.state === 'alert' || f.state === 'charge';
     for (let pass = 0; pass < 2; pass++) {
@@ -2310,7 +2357,7 @@ function levelUpFX(L) {
         { duration: rand(500, 900), easing: 'cubic-bezier(.2,.7,.4,1)' }).onfinish = () => s.remove();
     }
   }
-  levelGoo(L);
+  queuePrompt('level', () => levelGoo(L));
   G.rings.push({ x: S.x, y: S.y, r: swarmR(), vr: 170, life: 0.7, max: 0.7, c: col });
   G.rings.push({ x: S.x, y: S.y, r: swarmR() * 0.5, vr: 110, life: 0.6, max: 0.6, c: '#ffffff' });
   for (const d of S.dots) { const ex = d.x - S.x, ey = d.y - S.y, l = Math.hypot(ex, ey) || 1; d.vx += ex / l * 60; d.vy += ey / l * 60; }
@@ -2361,6 +2408,13 @@ function cinematic(main, sub, o = {}) {
     G.shake = Math.max(G.shake, 9); sfx.boom();
   }, dur * 0.13 + i * 260);
 }
+/* ---------- prompt queue: one prompt on screen at a time ---------- */
+const promptQ = [];
+function queuePrompt(type, run) {
+  if (type === 'level') for (let i = promptQ.length - 1; i >= 0; i--) if (promptQ[i].type === 'level') promptQ.splice(i, 1); // only the newest level-up
+  promptQ.push({ type, run });
+}
+function pumpPrompts() { if (promptQ.length && G.mode === 'play' && G.time >= (G.promptBusy || 0)) promptQ.shift().run(); }
 /* ---------- gooey blood prompts ---------- */
 const LEVEL_ENTRY = { 2: 'drop', 3: 'slide', 4: 'punch', 5: 'spin', 6: 'stamp', 7: 'shatter', 8: 'burst', 9: 'quake', 10: 'flood' };
 // a spree's speed boost lasts exactly as long as the window to chain the next kill
@@ -2493,7 +2547,7 @@ function onKill() {
   if (G.spree === 1) G.spreeIdx = 0;
   if (G.spree < spreeNeed(G.spreeIdx)) return;
   const i = G.spreeIdx++;
-  if (G.time < G.promptBusy || G.mode !== 'play') return;
+  if (G.time < G.promptBusy || promptQ.length || G.mode !== 'play') return;
   const pool = SPREE_WORDS[i < 3 ? 0 : i < 6 ? 1 : 2].filter(w => w !== G.lastSpreeWord), word = pick(pool);
   G.lastSpreeWord = word; G.promptBusy = G.time + 1.2; slowMo(0.55, 0.45);
   gooPrompt({ small: true, kicker: G.spree + ' KILL SPREE', main: word, sub: 'SPEED ×' + surgeMult().toFixed(1), entry: pick(['punch', 'slide', 'spin', 'drop']), k: Math.min(10, 3 + i), dur: 1400,
@@ -2591,7 +2645,8 @@ function showScreen(name) { for (const k in screens) screens[k].hidden = k !== n
 function startGame(quiet) {
   showScreen(null); el.hud.hidden = false; G.mode = 'play'; sfx.unlock();
   hud.lv = G.level; hud.best = Math.max(G.level, G.stats.peak || 1); hud.p = 0; hud.ghost = 0; setLevelVisuals(G.level);
-  if (!quiet) setTimeout(() => { if (G.mode === 'play') cinematic('USE YOUR THUMBS', 'TO MOVE THE PIRANHAS'); }, 350);
+  promptQ.length = 0;
+  if (!quiet) setTimeout(() => queuePrompt('start', () => cinematic('USE YOUR THUMBS', 'TO MOVE THE PIRANHAS')), 350);
 }
 function newRiver() { resetGame((Math.random() * 1e9) | 0); hud.lv = 1; hud.best = 1; hud.p = 0; setLevelVisuals(1); }
 function pauseGame(guideOnly) {
