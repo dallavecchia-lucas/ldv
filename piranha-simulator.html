@@ -88,13 +88,13 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 
 /* action-movie prompt: letterbox bars, slammed-in metal title, light sweep */
 #cine{position:fixed;inset:0;pointer-events:none;overflow:hidden;}
-.cine-bar{position:absolute;left:0;right:0;height:13vh;background:#000;transform:scaleY(0);}
+.cine-bar{position:absolute;left:0;right:0;height:6vh;background:#000;transform:scaleY(0);}
 .cine-bar.top{top:0;transform-origin:50% 0;} .cine-bar.bot{bottom:0;transform-origin:50% 100%;}
-.cine-txt{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;padding-inline:16px;}
-#cineMain{display:inline-block;opacity:0;font-family:var(--display);font-size:clamp(44px,14vw,120px);line-height:.92;text-wrap:balance;
+.cine-txt{position:absolute;left:0;right:0;top:30%;transform:translateY(-50%);text-align:center;padding-inline:16px;}
+#cineMain{display:inline-block;opacity:0;font-family:var(--display);font-size:clamp(32px,10vw,84px);line-height:.92;text-wrap:balance;
   color:#ffd23a;background:linear-gradient(180deg,#fffbe8 0%,#ffe27a 38%,#ff9a1e 56%,#d0200e 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
 .cine-mw{filter:drop-shadow(0 3px 0 #000) drop-shadow(0 6px 0 rgba(0,0,0,.6)) drop-shadow(0 0 22px rgba(255,70,20,.45));}
-#cineSub{opacity:0;margin-top:12px;font-family:var(--display);font-size:clamp(17px,5vw,38px);letter-spacing:.14em;color:#efe6cf;text-shadow:0 3px 0 #000, 2px 0 0 #000, -2px 0 0 #000, 0 -2px 0 #000;}
+#cineSub{opacity:0;margin-top:10px;font-family:var(--display);font-size:clamp(13px,3.8vw,26px);letter-spacing:.14em;color:#efe6cf;text-shadow:0 3px 0 #000, 2px 0 0 #000, -2px 0 0 #000, 0 -2px 0 #000;}
 .cine-sweep{position:absolute;top:50%;left:-60%;width:50%;height:clamp(60px,22vw,190px);transform:translateY(-50%) skewX(-24deg);
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);opacity:0;mix-blend-mode:overlay;}
 #flash{position:fixed;inset:0;pointer-events:none;background:#fff;opacity:0;}
@@ -107,18 +107,18 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 
 /* gooey blood prompts: an SVG goo filter melts title, drips and splats into one blob of blood */
 .goo{position:fixed;inset:0;pointer-events:none;overflow:hidden;}
-.goo-scene{position:absolute;left:0;right:0;top:46%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;text-align:center;padding-inline:16px;
+.goo-scene{position:absolute;left:0;right:0;top:calc(92px + var(--sat));display:flex;flex-direction:column;align-items:center;text-align:center;padding-inline:16px;
   filter:drop-shadow(0 4px 0 #1a0000) drop-shadow(0 0 3px rgba(0,0,0,.75));}
-.goo.small .goo-scene{top:24%;transform:translateY(-50%) rotate(-5deg);}
-.goo-kick{opacity:0;margin-bottom:14px;padding:5px 12px 4px;font-family:var(--pixel);font-weight:700;font-size:clamp(12px,3.6vw,20px);letter-spacing:.34em;
+.goo.small .goo-scene{top:calc(104px + var(--sat));transform:rotate(-4deg);}
+.goo-kick{opacity:0;margin-bottom:8px;padding:4px 10px 3px;font-family:var(--pixel);font-weight:700;font-size:clamp(10px,2.8vw,15px);letter-spacing:.34em;
   color:#ffe8e0;background:#7a0404;box-shadow:3px 3px 0 #000;}
-.goo.small .goo-kick{font-size:clamp(10px,3vw,15px);margin-bottom:8px;}
+.goo.small .goo-kick{font-size:clamp(9px,2.5vw,13px);margin-bottom:6px;}
 .goo-stack{display:grid;position:relative;}
 .goo-stack > *{grid-area:1/1;}
 .goo-wrap{position:relative;filter:url(#goo);}
 .goo.small .goo-wrap{filter:url(#goo-s);}
-.goo-main,.goo-gloss{font-family:var(--display);font-size:clamp(40px,12.5vw,110px);line-height:.95;text-wrap:balance;max-width:min(92vw,1100px);}
-.goo.small .goo-main,.goo.small .goo-gloss{font-size:clamp(30px,9.5vw,74px);}
+.goo-main,.goo-gloss{font-family:var(--display);font-size:clamp(28px,8.6vw,66px);line-height:.95;text-wrap:balance;max-width:min(92vw,1100px);}
+.goo.small .goo-main,.goo.small .goo-gloss{font-size:clamp(22px,6.6vw,48px);}
 .goo-main{position:relative;color:#e8180e;}
 .goo-main span{display:inline-block;}
 .goo-gloss{color:transparent;background:linear-gradient(180deg,transparent 0 14%,rgba(255,215,200,.62) 21%,transparent 34%,transparent 68%,rgba(50,0,0,.4) 100%);
@@ -127,12 +127,12 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 .goo-drip{position:absolute;top:86%;border-radius:45% 45% 50% 50% / 18% 18% 82% 82%;background:#8e0806;transform-origin:50% 0;transform:scaleY(0);}
 .goo-drop{position:absolute;border-radius:50%;background:#8e0806;opacity:0;}
 .goo-splat{position:absolute;left:50%;top:50%;border-radius:50%;background:#7e0705;transform:scale(0);}
-.goo-sub{opacity:0;margin-top:16px;font-family:var(--display);font-size:clamp(15px,4.4vw,30px);letter-spacing:.2em;color:#ffd9cf;text-shadow:2px 2px 0 #000,-2px 0 0 #000,0 -2px 0 #000;}
+.goo-sub{opacity:0;margin-top:8px;font-family:var(--display);font-size:clamp(12px,3.4vw,20px);letter-spacing:.2em;color:#ffd9cf;text-shadow:2px 2px 0 #000,-2px 0 0 #000,0 -2px 0 #000;}
 .goo-rain{position:absolute;inset:0;filter:url(#goo-s);}
 .goo-rain i{position:absolute;top:-60px;border-radius:50% 50% 50% 50% / 30% 30% 70% 70%;background:#a90a07;}
 .goo-art{opacity:0;margin-bottom:4px;}
-.goo-art canvas{display:block;width:min(82vw,440px);height:auto;image-rendering:pixelated;}
-.goo-flood{position:absolute;left:0;right:0;bottom:0;height:100vh;background:rgba(34,0,0,.86);transform:translateY(102%);}
+.goo-art canvas{display:block;width:min(56vw,260px);height:auto;image-rendering:pixelated;}
+.goo-flood{position:absolute;left:0;right:0;bottom:0;height:100vh;background:rgba(40,0,0,.42);transform:translateY(102%);}
 
 /* 90s arcade-fighter title screen: pixel canvas art, blinking arcade menu, CRT scanlines */
 .title-screen{display:block;padding:0;background:#000;overflow:hidden;touch-action:manipulation;}
@@ -231,9 +231,9 @@ h2.h{font-family:var(--display);font-size:clamp(26px,7vw,40px);margin:0;text-ali
 <div id="cine"><div class="cine-lines"></div><div class="cine-bar top"></div><div class="cine-bar bot"></div><div class="cine-sweep"></div><div class="cine-txt"><div id="cineKick"></div><div class="cine-mw"><div id="cineMain"></div></div><div id="cineSub"></div></div></div>
 <div id="flash"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <filter id="goo" x="-30%" y="-40%" width="160%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
+  <filter id="goo" x="-30%" y="-40%" width="160%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="4.5" result="b"/>
     <feColorMatrix in="b" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  <filter id="goo-s" x="-30%" y="-40%" width="160%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b"/>
+  <filter id="goo-s" x="-30%" y="-40%" width="160%" height="260%"><feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b"/>
     <feColorMatrix in="b" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 16 -6" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </svg>
 
@@ -989,7 +989,7 @@ function resetGame(seed) {
   genWorld(seed); chunks.clear();
   G.fish = []; G.blood = []; G.rings = []; G.bones = []; G.texts = []; G.zaps = [];
   resetBlood();
-  G.hungerOn = false; G.hungerAcc = 0; G.spree = 0; G.spreeIdx = 0; G.lastKillT = -99; G.promptBusy = 0; G.lastSpreeWord = ''; G.lastLoss = null; S.slow = 1;
+  G.hungerOn = false; G.hungerAcc = 0; G.slowT = 0; G.spree = 0; G.spreeIdx = 0; G.lastKillT = -99; G.promptBusy = 0; G.lastSpreeWord = ''; G.lastLoss = null; S.slow = 1;
   G.time = 0; G.spawnT = 0; G.shake = 0; G.won = false; G.stats = newStats(); G.hints = {}; G.lairWarnT = 0;
   S.x = startPos.x; S.y = startPos.y; S.vx = S.vy = 0; S.dots = []; S.dispT = 0; S.dispCd = 0; S.regroup = null; S.inv = 0; S.prey = null; S.alive = true;
   addDots(START_MASS, S.x, S.y);
@@ -1059,7 +1059,7 @@ function updateHunger(dt) {
   if (!G.hungerOn) {
     if (G.level < 2) return;
     G.hungerOn = true;
-    setTimeout(() => { if (G.mode === 'play') cinematic('HUNGER!', 'EAT TO SURVIVE!'); }, 3000);
+    setTimeout(() => { if (G.mode === 'play') { cinematic('HUNGER!', 'EAT TO SURVIVE!'); slowMo(0.8, 0.5); } }, 3000);
   }
   G.hungerAcc += HUNGER[G.level - 1] * dt;
   while (G.hungerAcc >= 1 && S.dots.length) {
@@ -1488,7 +1488,7 @@ function updateSwarm(dt) {
     }
     if (!input.down) S.carry = null;
   }
-  let maxV = (70 + G.level * 2.5) * (S.slow || 1) * (spreeBoost() ? 1.35 : 1); S.slow = 1;
+  let maxV = (70 + G.level * 2.5) * (S.slow || 1) * surgeMult(); S.slow = 1;
   if (S.dispT > 0 && S.regroup) {
     const rg = S.regroup;
     if (input.down) {
@@ -1694,9 +1694,10 @@ function render() {
     bx.drawImage(c.base, cx * CH - L, cy * CH - T);
   }
   if (chunkGen === lastGen) {
-    outer: for (let cy = r0 - 1; cy <= r1 + 1; cy++) for (let cx = c0 - 1; cx <= c1 + 1; cx++) {
+    const fast = Math.hypot(S.vx, S.vy) > 110, ring = fast ? 2 : 1; let budget = fast ? 2 : 1;
+    outer: for (let cy = r0 - ring; cy <= r1 + ring; cy++) for (let cx = c0 - ring; cx <= c1 + ring; cx++) {
       if (cx < 0 || cy < 0 || cx >= NCH || cy >= NCH || chunks.has(cy * NCH + cx)) continue;
-      getChunk(cx, cy, true); break outer;
+      getChunk(cx, cy, true); if (--budget <= 0) break outer;
     }
   }
   lastGen = chunkGen;
@@ -1729,7 +1730,7 @@ function render() {
     const vl = Math.hypot(S.vx, S.vy) || 1, ux = S.vx / vl, uy = S.vy / vl;
     bx.fillStyle = '#ff3a22';
     const stepN = Math.max(1, Math.floor(S.dots.length / 160));
-    for (let i = 0; i < S.dots.length; i += stepN) { const d = S.dots[i]; for (let k = 1; k <= 6; k++) { bx.globalAlpha = 0.7 - k * 0.1; bx.fillRect(Math.round(d.x - ux * k * 2 - L), Math.round(d.y - uy * k * 2 - T), 1, 1); } }
+    for (let i = 0; i < S.dots.length; i += stepN) { const d = S.dots[i]; const tl = 4 + Math.min(10, G.spreeIdx * 2); for (let k = 1; k <= tl; k++) { bx.globalAlpha = 0.75 * (1 - k / (tl + 1)); bx.fillRect(Math.round(d.x - ux * k * 2 - L), Math.round(d.y - uy * k * 2 - T), 1, 1); } }
     bx.globalAlpha = 1;
   }
   drawDots(L, T, 1);
@@ -2215,11 +2216,12 @@ function levelArt(L) {
 }
 /* ================= audio (synthesised, no files) ================= */
 const sfx = (() => {
-  let ac = null, master = null, nb = null, on = true;
+  let ac = null, master = null, lowpass = null, nb = null, on = true;
   function unlock() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
     try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
-    master = ac.createGain(); master.gain.value = on ? 0.5 : 0; master.connect(ac.destination);
+    master = ac.createGain(); master.gain.value = on ? 0.5 : 0;
+    lowpass = ac.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 20000; master.connect(lowpass); lowpass.connect(ac.destination);
     nb = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
     const ch = nb.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
     // river ambience: looping filtered noise
@@ -2260,6 +2262,7 @@ const sfx = (() => {
     dead() { tone('sawtooth', 220, 40, 1.2, 0.18); noise(1, 0.2, 'lowpass', 800, 80, 0.7); },
     boom() { tone('sine', 120, 32, 0.9, 0.5); noise(0.5, 0.3, 'lowpass', 2400, 90, 0.8); tone('sawtooth', 70, 38, 0.6, 0.08); },
     win() { [0, 4, 7, 12, 7, 12, 16, 19, 24].forEach((n, i) => tone('square', semi(n), semi(n), 0.16, 0.08, i * 0.11)); },
+    muffle(m) { if (lowpass) lowpass.frequency.setTargetAtTime(m ? 650 : 20000, ac.currentTime, 0.08); },
     toggle() { on = !on; if (master) master.gain.value = on ? 0.5 : 0; return on; },
   };
 })();
@@ -2363,6 +2366,21 @@ const LEVEL_ENTRY = { 2: 'drop', 3: 'slide', 4: 'punch', 5: 'spin', 6: 'stamp', 
 // a spree's speed boost lasts exactly as long as the window to chain the next kill
 const SPREE_WINDOW = 3;
 const spreeBoost = () => G.mode === 'play' && G.spree >= SPREE_AT[0] && G.time - G.lastKillT < SPREE_WINDOW;
+// every spree milestone inside one unbroken chain stacks another surge of speed
+const surgeMult = () => spreeBoost() ? Math.min(2.8, 1 + 0.3 * Math.max(1, G.spreeIdx)) : 1;
+// slow motion: game time eases down to `depth`, holds, then eases back; real-time animations keep playing
+function slowMo(dur, depth) {
+  if (reduceMotion) return;
+  const running = G.slowOn && G.slowT > 0;
+  G.slowDepth = running ? Math.min(depth, G.slowDepth) : depth; G.slowDur = dur; G.slowT = dur;
+  if (!G.slowOn) { G.slowOn = true; sfx.muffle(true); }
+}
+function timeScale(rdt) {
+  if (!G.slowT || G.slowT <= 0) { if (G.slowOn) { G.slowOn = false; sfx.muffle(false); } return 1; }
+  G.slowT -= rdt;
+  const p = 1 - Math.max(0, G.slowT) / G.slowDur, env = p < 0.12 ? p / 0.12 : p > 0.55 ? Math.max(0, (1 - p) / 0.45) : 1;
+  return 1 - (1 - G.slowDepth) * env;
+}
 const EO2 = 'cubic-bezier(.2,.9,.3,1)';
 function cineBars(dur) {
   if (reduceMotion) return;
@@ -2424,7 +2442,7 @@ function gooPrompt(o) {
   // blood splats burst out behind the letters and melt into them
   const box = main.getBoundingClientRect(), hw = box.width / 2, hh = box.height / 2, splats = q('.goo-splats');
   for (let i = 0; i < o.splats; i++) {
-    const s = rand(6, 12 + k * 1.4), a = Math.random() * TAU, r = rand(0.9, 1.15 + k * 0.035), e = document.createElement('i');
+    const s = rand(4, 8 + k * 0.9), a = Math.random() * TAU, r = rand(0.9, 1.15 + k * 0.035), e = document.createElement('i');
     const dx = Math.cos(a) * (hw * r + s * 0.4), dy = Math.sin(a) * (hh * r + s * 0.6);
     e.className = 'goo-splat'; e.style.width = e.style.height = s + 'px'; e.style.margin = `${-s / 2}px 0 0 ${-s / 2}px`; splats.appendChild(e);
     const at = slam + rand(0, 0.03);
@@ -2434,7 +2452,7 @@ function gooPrompt(o) {
   // drips run down from the letters, some let go of a drop
   const drips = q('.goo-drips');
   for (let i = 0; i < o.drips; i++) {
-    const w = rand(6, 11 + k * 0.6), h = rand(16, 26 + k * 11), e = document.createElement('i');
+    const w = rand(4, 7 + k * 0.4), h = rand(10, 16 + k * 6), e = document.createElement('i');
     e.className = 'goo-drip'; e.style.left = rand(3, 95) + '%'; e.style.width = w + 'px'; e.style.height = h + 'px'; drips.appendChild(e);
     const at = slam + rand(0.02, 0.12), full = Math.min(0.8, at + rand(0.2, 0.45));
     e.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(0)', offset: at, easing: 'ease-in' }, { transform: 'scaleY(1)', offset: full }, { transform: 'scaleY(1.2)' }], t);
@@ -2454,17 +2472,17 @@ function gooPrompt(o) {
   if (o.flood) q('.goo-flood').animate([{ transform: 'translateY(102%)' }, { transform: 'translateY(0)', offset: 0.2, easing: 'ease-out' }, { transform: 'translateY(0)', offset: 0.76, easing: 'ease-in' }, { transform: 'translateY(102%)' }], t);
   // the hit: red wash, shake, a wet boom
   setTimeout(() => {
-    el.vig.animate([{ opacity: Math.min(1, 0.3 + k * 0.07) }, { opacity: 0 }], { duration: 650, easing: 'ease-out' });
-    if (k >= 6) el.flash.animate([{ opacity: 0.35 }, { opacity: 0 }], { duration: 220 });
-    G.shake = Math.max(G.shake, o.small ? 5 : 6 + k); sfx.boom(); sfx.splat(Math.min(1, 0.3 + k * 0.07));
-    if (o.entry === 'stamp') setTimeout(() => { G.shake = Math.max(G.shake, 10); sfx.boom(); }, dur * 0.14);
+    el.vig.animate([{ opacity: Math.min(0.6, 0.15 + k * 0.035) }, { opacity: 0 }], { duration: 600, easing: 'ease-out' });
+    if (k >= 10) el.flash.animate([{ opacity: 0.25 }, { opacity: 0 }], { duration: 200 });
+    G.shake = Math.max(G.shake, o.small ? 3 : 3 + k * 0.4); sfx.boom(); sfx.splat(Math.min(1, 0.3 + k * 0.07));
+    if (o.entry === 'stamp') setTimeout(() => { G.shake = Math.max(G.shake, 5); sfx.boom(); }, dur * 0.14);
   }, dur * slam);
 }
 function levelGoo(L) {
-  const dur = L === MAX_LEVEL ? 3800 : 2700;
-  cineBars(dur); G.promptBusy = G.time + dur / 1000;
+  const dur = L === MAX_LEVEL ? 3200 : 2300;
+  G.promptBusy = G.time + dur / 1000; slowMo(L === MAX_LEVEL ? 1.6 : 1.1, L === MAX_LEVEL ? 0.2 : 0.28);
   gooPrompt({ kicker: L === MAX_LEVEL ? 'MAXIMUM MASS' : 'LEVEL UP', main: LEVELS[L - 1].name, sub: 'LEVEL ' + L, entry: LEVEL_ENTRY[L] || 'punch', k: L, dur,
-    drips: 4 + L * 3, splats: 4 + L * 5, rain: L >= 5 ? (L - 4) * 12 : 0, flood: L === MAX_LEVEL, art: levelArt(L) });
+    drips: 4 + L * 3, splats: 4 + L * 5, rain: L >= 5 ? (L - 4) * 7 : 0, flood: L === MAX_LEVEL, art: levelArt(L) });
 }
 /* ---------- kill sprees ---------- */
 const SPREE_AT = [5, 10, 15, 20, 30, 40, 50, 75, 100];
@@ -2477,9 +2495,9 @@ function onKill() {
   const i = G.spreeIdx++;
   if (G.time < G.promptBusy || G.mode !== 'play') return;
   const pool = SPREE_WORDS[i < 3 ? 0 : i < 6 ? 1 : 2].filter(w => w !== G.lastSpreeWord), word = pick(pool);
-  G.lastSpreeWord = word; G.promptBusy = G.time + 1.5;
-  gooPrompt({ small: true, kicker: G.spree + ' KILL SPREE', main: word, entry: pick(['punch', 'slide', 'spin', 'drop']), k: Math.min(10, 3 + i), dur: 1700,
-    drips: 5 + i * 2, splats: 8 + i * 4, rain: i >= 6 ? 16 : 0 });
+  G.lastSpreeWord = word; G.promptBusy = G.time + 1.2; slowMo(0.55, 0.45);
+  gooPrompt({ small: true, kicker: G.spree + ' KILL SPREE', main: word, sub: 'SPEED ×' + surgeMult().toFixed(1), entry: pick(['punch', 'slide', 'spin', 'drop']), k: Math.min(10, 3 + i), dur: 1400,
+    drips: 4 + i * 2, splats: 6 + i * 3, rain: i >= 6 ? 10 : 0 });
 }
 
 function updateHud(dt) {
@@ -2648,7 +2666,8 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (G.mode === 'pause') return;
   chunkTick++; frameN++;
-  if (dt > 1 / 40) { step(dt / 2); step(dt / 2); } else step(dt);
+  const sdt = dt * timeScale(dt);
+  if (sdt > 1 / 40) { step(sdt / 2); step(sdt / 2); } else step(sdt);
   render();
   if (G.mode !== 'title') { updateHud(dt); if (frameN % 4 === 0) drawMinimap(); }
 }
