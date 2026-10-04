@@ -1484,13 +1484,28 @@ function updateSwarm(dt) {
     else if (input.down) {
       const p = worldToCss(S.x, S.y), dx = input.x - p.x, dy = input.y - p.y, dd = Math.hypot(dx, dy);
       if (dd > 6) { mx = dx / dd; my = dy / dd; spd = clamp((dd - 6) / 22, 0.35, 1); }
+      else if (S.carry) { mx = S.carry.x; my = S.carry.y; spd = 1; }
     }
+    if (!input.down) S.carry = null;
   }
   let maxV = (70 + G.level * 2.5) * (S.slow || 1) * (spreeBoost() ? 1.35 : 1); S.slow = 1;
   if (S.dispT > 0 && S.regroup) {
-    const ex = S.regroup.x - S.x, ey = S.regroup.y - S.y, el = Math.hypot(ex, ey);
-    const v = el > 1.5 ? Math.min(280, el * 6) : 0;
-    S.vx = el > 0 ? ex / el * v : 0; S.vy = el > 0 ? ey / el * v : 0;
+    const rg = S.regroup;
+    if (input.down) {
+      // the dash target follows the thumb, within reach of where the dash began
+      const w = cssToWorld(input.x, input.y); let wx = w.x - rg.ox, wy = w.y - rg.oy; const wl = Math.hypot(wx, wy);
+      if (wl > 150) { wx *= 150 / wl; wy *= 150 / wl; }
+      if (depthAt(rg.ox + wx, rg.oy + wy) > 3) { rg.x = rg.ox + wx; rg.y = rg.oy + wy; }
+    }
+    const ex = rg.x - S.x, ey = rg.y - S.y, el = Math.hypot(ex, ey);
+    if (el > 6 && S.dispT > 0.05) {
+      const v = Math.max(maxV * 1.1, Math.min(280, el * 6)); S.vx = ex / el * v; S.vy = ey / el * v;
+      rg.ux = ex / el; rg.uy = ey / el;
+    } else {
+      const ux = rg.ux || 0, uy = rg.uy || 0;
+      S.vx = ux * maxV; S.vy = uy * maxV; S.regroup = null;
+      if (input.down && (ux || uy)) S.carry = { x: ux, y: uy };
+    }
   } else {
     let tvx = mx * maxV * spd, tvy = my * maxV * spd;
     const pr = S.prey;
@@ -1556,7 +1571,8 @@ function triggerScatter() {
   if (el > 150) { ex *= 150 / el; ey *= 150 / el; }
   let best = { x: S.x, y: S.y };
   for (let s = 0.05; s <= 1.0001; s += 0.05) { const px = S.x + ex * s, py = S.y + ey * s; if (depthAt(px, py) > 3) best = { x: px, y: py }; else break; }
-  S.regroup = best;
+  S.regroup = best; best.ox = S.x; best.oy = S.y; S.carry = null;
+  { const ex = best.x - S.x, ey = best.y - S.y, el = Math.hypot(ex, ey); if (el > 1) { best.ux = ex / el; best.uy = ey / el; } else if (Math.hypot(S.vx, S.vy) > 5) { const v = Math.hypot(S.vx, S.vy); best.ux = S.vx / v; best.uy = S.vy / v; } }
   for (const d of S.dots) { const a = Math.atan2(d.sy, d.sx) + rand(-0.6, 0.6), sp = rand(110, 240); d.vx = Math.cos(a) * sp + S.vx * 0.3; d.vy = Math.sin(a) * sp + S.vy * 0.3; }
   for (const f of G.fish) if ((f.state === 'charge' || f.state === 'alert') && Math.hypot(f.x - S.x, f.y - S.y) < 240) { f.state = 'retreat'; f.st = rand(1.2, 1.7); f.lost = true; }
   if (boss.state === 'coil' || boss.state === 'strike') { boss.state = 'recover'; boss.st = 0.9; }
