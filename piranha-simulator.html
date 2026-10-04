@@ -130,8 +130,8 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
 .goo-sub{opacity:0;margin-top:16px;font-family:var(--display);font-size:clamp(15px,4.4vw,30px);letter-spacing:.2em;color:#ffd9cf;text-shadow:2px 2px 0 #000,-2px 0 0 #000,0 -2px 0 #000;}
 .goo-rain{position:absolute;inset:0;filter:url(#goo-s);}
 .goo-rain i{position:absolute;top:-60px;border-radius:50% 50% 50% 50% / 30% 30% 70% 70%;background:#a90a07;}
-.goo-curtain{position:absolute;left:-6%;right:-6%;top:0;height:36vh;background:#5c0403;filter:url(#goo);transform:translateY(-130%);}
-.goo-curtain i{position:absolute;top:100%;margin-top:-8px;border-radius:0 0 50% 50% / 0 0 70% 70%;background:#5c0403;transform-origin:50% 0;}
+.goo-art{opacity:0;margin-bottom:4px;}
+.goo-art canvas{display:block;width:min(82vw,440px);height:auto;image-rendering:pixelated;}
 .goo-flood{position:absolute;left:0;right:0;bottom:0;height:100vh;background:rgba(34,0,0,.86);transform:translateY(102%);}
 
 /* 90s arcade-fighter title screen: pixel canvas art, blinking arcade menu, CRT scanlines */
@@ -1486,7 +1486,7 @@ function updateSwarm(dt) {
       if (dd > 6) { mx = dx / dd; my = dy / dd; spd = clamp((dd - 6) / 22, 0.35, 1); }
     }
   }
-  let maxV = (70 + G.level * 2.5) * (S.slow || 1); S.slow = 1;
+  let maxV = (70 + G.level * 2.5) * (S.slow || 1) * (spreeBoost() ? 1.35 : 1); S.slow = 1;
   if (S.dispT > 0 && S.regroup) {
     const ex = S.regroup.x - S.x, ey = S.regroup.y - S.y, el = Math.hypot(ex, ey);
     const v = el > 1.5 ? Math.min(280, el * 6) : 0;
@@ -1708,6 +1708,14 @@ function render() {
   bx.globalAlpha = 0.16; bx.fillStyle = '#020806';
   for (const d of S.dots) bx.fillRect(Math.round(d.x - L), Math.round(d.y - T) + 1, 2, 2);
   bx.globalAlpha = 1;
+  if (spreeBoost()) {
+    // frenzy streaks trail the swarm while the spree boost is on
+    const vl = Math.hypot(S.vx, S.vy) || 1, ux = S.vx / vl, uy = S.vy / vl;
+    bx.fillStyle = '#ff3a22';
+    const stepN = Math.max(1, Math.floor(S.dots.length / 160));
+    for (let i = 0; i < S.dots.length; i += stepN) { const d = S.dots[i]; for (let k = 1; k <= 6; k++) { bx.globalAlpha = 0.7 - k * 0.1; bx.fillRect(Math.round(d.x - ux * k * 2 - L), Math.round(d.y - uy * k * 2 - T), 1, 1); } }
+    bx.globalAlpha = 1;
+  }
   drawDots(L, T, 1);
   for (const r of G.rings) {
     bx.globalAlpha = clamp(r.life / r.max, 0, 1) * 0.8; bx.fillStyle = r.c;
@@ -2028,6 +2036,167 @@ function startTitle() {
   TITLE.raf = requestAnimationFrame(drawTitle);
 }
 function stopTitle() { cancelAnimationFrame(TITLE.raf); TITLE.raf = 0; }
+/* ================= level-up portraits: fighting-game pixel art of the swarm ================= */
+// Nine scenes, from a few nippers to a swarm out of hell. Drawn smooth, then crunched by pixelize().
+const ART_W = 160, ART_H = 100;
+const PIR_PAL = {
+  normal: { body: ['#1e272b', '#55656a', '#b4c2c0', '#d8cfa8', '#e8682a', '#a8140a'], fin: '#a8241a', dorsal: '#3c3634', eye: '#ffd23a', iris: '#d0200e' },
+  blood: { body: ['#2a1414', '#5a3434', '#a07c78', '#c8906c', '#d43a1c', '#8a0a06'], fin: '#8a0e0a', dorsal: '#2a1a18', eye: '#ffd23a', iris: '#ff1a0a' },
+  dark: { body: ['#08080c', '#16161c', '#2c2c34', '#3a2c2a', '#4a140e', '#2a0604'], fin: '#3a0806', dorsal: '#0c0c10', eye: '#ff3010', iris: '#ffe060', glow: 'rgba(255,40,10,.75)' },
+  hell: { body: ['#1a0402', '#3a0804', '#6a1006', '#a01808', '#e04010', '#ff8a1a'], fin: '#c02008', dorsal: '#2a0402', eye: '#ffe24a', iris: '#ff3a0a', glow: 'rgba(255,160,20,.85)' },
+};
+const MINI = {
+  normal: ['#3a4448', '#8a9a9a', '#d04020'], dark: ['#0c0c10', '#24242a', '#4a0e0a'], hell: ['#3a0602', '#7a1206', '#ff6a1a'], blood: ['#3a1a18', '#8a5a54', '#c82a12'],
+};
+const poly = (x, pts, fill) => { x.beginPath(); x.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) x.lineTo(pts[i], pts[i + 1]); x.closePath(); x.fillStyle = fill; x.fill(); };
+
+// side-on piranha in a 120x84 box, drawn centred on (o.x, o.y) at scale o.s
+function drawPiranha(x, o) {
+  const P = PIR_PAL[o.pal || 'normal'];
+  x.save(); x.translate(o.x, o.y); if (o.rot) x.rotate(o.rot); x.scale(o.s * (o.dir || 1), o.s); x.translate(-60, -42);
+  poly(x, [30, 38, 6, 12, 16, 40, 4, 70, 30, 50], P.fin);
+  poly(x, [46, 18, 60, 1, 74, 16], P.dorsal);
+  poly(x, [46, 64, 38, 80, 62, 68], P.fin);
+  if (o.horns) { poly(x, [72, 14, 70, -14, 84, 10], '#2a0604'); poly(x, [70, -14, 68, -22, 74, -8], '#e8d0a0'); poly(x, [88, 16, 98, -8, 98, 18], '#2a0604'); poly(x, [98, -8, 100, -16, 101, -2], '#e8d0a0'); }
+  x.beginPath(); x.moveTo(28, 40);
+  x.bezierCurveTo(34, 18, 60, 6, 84, 13); x.bezierCurveTo(98, 17, 108, 25, 112, 34);
+  x.lineTo(93, 44); x.lineTo(117, 55);
+  x.bezierCurveTo(113, 66, 96, 74, 74, 74); x.bezierCurveTo(52, 74, 36, 63, 28, 46); x.closePath();
+  const g = x.createLinearGradient(0, 8, 0, 74), st = [0, 0.28, 0.48, 0.6, 0.7, 1];
+  P.body.forEach((c, i) => g.addColorStop(st[i], c)); x.fillStyle = g; x.fill();
+  if (o.cracks) { x.strokeStyle = '#ffb02a'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(40, 30); x.lineTo(52, 38); x.lineTo(48, 50); x.moveTo(60, 20); x.lineTo(66, 34); x.lineTo(78, 40); x.lineTo(74, 56); x.moveTo(56, 58); x.lineTo(66, 64); x.stroke(); }
+  poly(x, [111, 35.5, 94, 44, 115, 54.5], '#3a0404');
+  for (let t = 0.05; t < 0.95; t += 0.19) {
+    const ux = lerp(111, 95, t), uy = lerp(35.5, 43.5, t); poly(x, [ux - 1.9, uy, ux + 1.9, uy, ux, uy + 5], o.bloodTeeth ? '#f0c8b8' : '#fffbe6');
+    const lx = lerp(115, 96, t), ly = lerp(54.5, 45, t); poly(x, [lx - 1.9, ly, lx + 1.9, ly, lx, ly - 5], o.bloodTeeth ? '#f0c8b8' : '#fffbe6');
+  }
+  if (o.bloodTeeth) { x.fillStyle = '#c0100a'; x.fillRect(100, 50, 2, 9); x.fillRect(107, 52, 2, 13); x.fillRect(96, 47, 1.6, 6); }
+  x.strokeStyle = '#141b1d'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(82, 21); x.bezierCurveTo(74, 34, 74, 50, 80, 62); x.stroke();
+  if (P.glow || o.glow) { const gg = x.createRadialGradient(90, 28, 2, 90, 28, 16); gg.addColorStop(0, P.glow || 'rgba(255,200,40,.8)'); gg.addColorStop(1, 'rgba(255,60,0,0)'); x.fillStyle = gg; x.fillRect(70, 8, 40, 40); }
+  x.fillStyle = P.eye; x.beginPath(); x.arc(90, 28, 6.5, 0, TAU); x.fill();
+  x.fillStyle = P.iris; x.beginPath(); x.arc(90.5, 28.5, 4.4, 0, TAU); x.fill();
+  x.fillStyle = '#000'; if (o.pal === 'hell' || o.pal === 'dark') x.fillRect(90.6, 24.5, 1.8, 8); else { x.beginPath(); x.arc(91.5, 29, 2.3, 0, TAU); x.fill(); }
+  x.strokeStyle = '#080a0b'; x.lineWidth = 3.2; x.beginPath(); x.moveTo(79, 19); x.lineTo(98, 25.5); x.stroke();
+  x.restore();
+}
+// a little crowd piranha: oval body, tail, red belly, eye, open mouth
+function miniFish(x, px, py, len, dir, pal, rot = 0, eyeGlow) {
+  const [back, side, belly] = MINI[pal || 'normal'], h = len * 0.6;
+  x.save(); x.translate(px, py); x.rotate(rot); x.scale(dir, 1);
+  poly(x, [-len * 0.42, 0, -len * 0.72, -h * 0.55, -len * 0.62, 0, -len * 0.72, h * 0.55], back);
+  x.beginPath(); x.ellipse(0, 0, len * 0.5, h * 0.5, 0, 0, TAU);
+  const g = x.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, back); g.addColorStop(0.45, side); g.addColorStop(0.75, belly); g.addColorStop(1, belly);
+  x.fillStyle = g; x.fill();
+  poly(x, [len * 0.5, -h * 0.05, len * 0.22, h * 0.08, len * 0.5, h * 0.3], '#2a0303');
+  x.fillStyle = eyeGlow || '#ffd23a'; x.fillRect(len * 0.22, -h * 0.28, Math.max(1.4, len * 0.12), Math.max(1.4, len * 0.12));
+  x.restore();
+}
+function burst(x, cx, cy, r, spikes, c1, c2, seed) {
+  const R = mulberry32(seed);
+  x.beginPath();
+  for (let i = 0; i <= spikes * 2; i++) { const a = i / (spikes * 2) * TAU, rr = i % 2 ? r * (0.55 + R() * 0.15) : r * (0.92 + R() * 0.2); x.lineTo(cx + Math.cos(a) * rr * 1.45, cy + Math.sin(a) * rr); }
+  x.fillStyle = c1; x.fill();
+  x.beginPath(); x.ellipse(cx, cy, r * 0.95, r * 0.62, 0, 0, TAU); x.fillStyle = c2; x.fill();
+}
+function splats(x, cx, cy, n, spread, seed, col = '#b00c08') {
+  const R = mulberry32(seed); x.fillStyle = col;
+  for (let i = 0; i < n; i++) { const a = R() * TAU, d = R() * spread, r = 1 + R() * 3; x.beginPath(); x.arc(cx + Math.cos(a) * d * 1.4, cy + Math.sin(a) * d, r, 0, TAU); x.fill(); }
+}
+function skull(x, cx, cy, s) {
+  x.save(); x.translate(cx, cy); x.scale(s, s);
+  x.fillStyle = '#e8e0c8'; x.beginPath(); x.arc(0, -1, 5, Math.PI, 0); x.lineTo(4, 3); x.lineTo(-4, 3); x.closePath(); x.fill(); x.fillRect(-3, 3, 6, 3);
+  x.fillStyle = '#1a0a08'; x.fillRect(-3.2, -1.5, 2.4, 2.4); x.fillRect(0.8, -1.5, 2.4, 2.4); x.fillRect(-0.5, 1.5, 1, 1.2);
+  x.restore();
+}
+function bone(x, cx, cy, len, a) {
+  x.save(); x.translate(cx, cy); x.rotate(a); x.fillStyle = '#e8e0c8';
+  x.fillRect(-len / 2, -1, len, 2); [-len / 2, len / 2].forEach(e => { x.beginPath(); x.arc(e, -1.4, 1.6, 0, TAU); x.arc(e, 1.4, 1.6, 0, TAU); x.fill(); });
+  x.restore();
+}
+function flames(x, y, w, h, seed) {
+  const R = mulberry32(seed);
+  for (let layer = 0; layer < 3; layer++) {
+    x.fillStyle = ['#a01006', '#ff5a10', '#ffd23a'][layer];
+    const hh = h * (1 - layer * 0.3);
+    x.beginPath(); x.moveTo(0, y);
+    for (let px = 0; px <= w; px += 6) x.lineTo(px + 3, y - hh * (0.4 + R() * 0.6)), x.lineTo(px + 6, y - hh * 0.15 * R());
+    x.lineTo(w, ART_H); x.lineTo(0, ART_H); x.closePath(); x.fill();
+  }
+}
+const LEVEL_ART = {};
+function levelArt(L) {
+  if (LEVEL_ART[L]) return LEVEL_ART[L];
+  const c = document.createElement('canvas'); c.width = ART_W; c.height = ART_H;
+  const x = c.getContext('2d'), R = mulberry32(L * 977), cx = ART_W / 2, cy = ART_H / 2;
+  switch (L) {
+    case 2: // NIPPING SHOAL: three nippers on the move
+      burst(x, cx, cy, 34, 9, '#3a0806', '#5a0c08', 2);
+      drawPiranha(x, { x: 70, y: 54, s: 0.42 }); drawPiranha(x, { x: 104, y: 38, s: 0.28 }); drawPiranha(x, { x: 108, y: 70, s: 0.26 });
+      for (let i = 0; i < 6; i++) { x.fillStyle = '#9fd8c4'; x.beginPath(); x.arc(30 + R() * 30, 20 + R() * 60, 1 + R() * 1.5, 0, TAU); x.fill(); }
+      break;
+    case 3: // HUNGRY SWARM: a pack, mouths open, drooling blood
+      burst(x, cx, cy, 38, 10, '#3e0806', '#620e08', 3);
+      for (let i = 0; i < 7; i++) drawPiranha(x, { x: 40 + R() * 70, y: 22 + R() * 58, s: 0.18 + R() * 0.1 });
+      drawPiranha(x, { x: 92, y: 52, s: 0.42, bloodTeeth: true });
+      splats(x, 132, 62, 8, 8, 31);
+      break;
+    case 4: // FRENZY: ring of piranhas tearing a fish to the bone
+      burst(x, cx, cy, 42, 12, '#440806', '#6e1008', 4);
+      x.save(); x.translate(cx, cy); bone(x, 0, 0, 30, 0); for (let i = -2; i <= 2; i++) bone(x, i * 5, 0, 12, Math.PI / 2); skull(x, 18, 0, 1.2); x.restore();
+      for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; drawPiranha(x, { x: cx + Math.cos(a) * 46, y: cy + Math.sin(a) * 28, s: 0.22, dir: 1, rot: a + Math.PI, bloodTeeth: i % 2 === 0 }); }
+      splats(x, cx, cy, 26, 30, 41);
+      break;
+    case 5: { // RAZOR CLOUD: a storm cloud made of teeth, lightning inside
+      burst(x, cx, cy, 44, 14, '#2a0606', '#4a0a08', 5);
+      x.strokeStyle = '#fff6c8'; x.lineWidth = 2; x.beginPath(); x.moveTo(70, 4); x.lineTo(62, 30); x.lineTo(74, 34); x.lineTo(60, 66); x.stroke();
+      for (let i = 0; i < 46; i++) { const a = R() * TAU, d = Math.sqrt(R()); miniFish(x, cx + Math.cos(a) * d * 62, cy + Math.sin(a) * d * 30, 9 + R() * 6, R() < 0.7 ? 1 : -1, 'normal'); }
+      for (let i = 0; i < 6; i++) { const px = 40 + R() * 80, py = 25 + R() * 50; poly(x, [px, py, px + 4, py, px + 2, py + 6], '#ffffff'); }
+      break;
+    }
+    case 6: // BLOOD HORDE: a big brute charging, the horde behind, a trail of blood
+      burst(x, cx, cy, 46, 14, '#520806', '#800e08', 6);
+      for (let i = 0; i < 26; i++) splats(x, 20 + i * 3, 50 + Math.sin(i) * 6, 2, 6, 60 + i, '#9a0a06');
+      for (let i = 0; i < 16; i++) miniFish(x, 14 + R() * 70, 26 + R() * 50, 10 + R() * 5, 1, 'blood');
+      drawPiranha(x, { x: 108, y: 50, s: 0.56, pal: 'blood', bloodTeeth: true });
+      x.fillStyle = 'rgba(255,230,210,.8)'; for (let i = 0; i < 5; i++) x.fillRect(64 + R() * 10, 30 + i * 9, 16 + R() * 10, 1.4);
+      break;
+    case 7: { // FLESH TIDE: a breaking wave of piranhas, foaming blood
+      burst(x, cx, cy, 46, 14, '#4a0606', '#740c08', 7);
+      x.beginPath(); x.moveTo(0, 96); x.bezierCurveTo(30, 60, 70, 18, 116, 16); x.bezierCurveTo(146, 16, 152, 40, 132, 46); x.bezierCurveTo(122, 32, 104, 36, 100, 52);
+      x.bezierCurveTo(96, 72, 120, 90, 160, 96); x.closePath();
+      const wg = x.createLinearGradient(0, 16, 0, 96); wg.addColorStop(0, '#6a1410'); wg.addColorStop(1, '#2a0606'); x.fillStyle = wg; x.fill();
+      for (let i = 0; i < 40; i++) { const t = R(); const px = lerp(10, 140, t), py = 96 - Math.sin(t * Math.PI * 0.9) * 70 + R() * 12; miniFish(x, px, py, 9 + R() * 5, 1, 'blood', -0.5 + t * 0.9); }
+      splats(x, 128, 22, 16, 14, 71, '#ff8a8a'); skull(x, 60, 70, 1.3);
+      break;
+    }
+    case 8: { // BONE STORM: a vortex of piranhas and bones
+      burst(x, cx, cy, 48, 16, '#3a0606', '#5c0a08', 8);
+      x.fillStyle = '#140404'; x.beginPath(); x.ellipse(cx, cy, 10, 6, 0, 0, TAU); x.fill();
+      for (let i = 0; i < 60; i++) { const t = i / 60, a = t * TAU * 2.4, r = 8 + t * 58; const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r * 0.55;
+        if (i % 7 === 3) bone(x, px, py, 10, a); else if (i % 11 === 5) skull(x, px, py, 1.1); else miniFish(x, px, py, 9 + t * 5, 1, 'normal', a + Math.PI / 2); }
+      break;
+    }
+    case 9: { // RIVER PLAGUE: a black mass full of burning eyes rising from a red river
+      burst(x, cx, cy, 48, 16, '#1a0202', '#2e0404', 9);
+      x.fillStyle = '#5a0604'; x.fillRect(0, 76, ART_W, 24); x.fillStyle = '#8a0c08'; for (let i = 0; i < 12; i++) x.fillRect(R() * ART_W, 78 + R() * 18, 6 + R() * 10, 1.5);
+      x.fillStyle = '#060608'; x.beginPath(); x.ellipse(cx, 52, 64, 30, 0, 0, TAU); x.fill();
+      for (let i = 0; i < 26; i++) miniFish(x, cx - 56 + R() * 112, 30 + R() * 44, 10 + R() * 6, R() < 0.5 ? 1 : -1, 'dark', 0, '#ff3010');
+      drawPiranha(x, { x: cx, y: 46, s: 0.46, pal: 'dark', bloodTeeth: true });
+      for (let i = 0; i < 4; i++) skull(x, 20 + i * 40, 84 + (i % 2) * 6, 1.1);
+      break;
+    }
+    case 10: { // AMAZON APOCALYPSE: the hell piranha, horned and burning, its swarm in orbit
+      burst(x, cx, cy, 50, 18, '#5a0a02', '#a01a06', 10);
+      flames(x, 100, ART_W, 34, 101);
+      for (let i = 0; i < 34; i++) { const a = R() * TAU, r = 52 + R() * 16; miniFish(x, cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.48, 9 + R() * 5, Math.cos(a) < 0 ? 1 : -1, 'hell', 0, '#ffe24a'); }
+      drawPiranha(x, { x: cx + 4, y: 52, s: 0.7, pal: 'hell', horns: true, cracks: true, bloodTeeth: true });
+      skull(x, 22, 86, 1.4); skull(x, 140, 84, 1.4);
+      break;
+    }
+    default: drawPiranha(x, { x: cx, y: cy, s: 0.5 });
+  }
+  return (LEVEL_ART[L] = pixelize(c, 6, 1));
+}
 /* ================= audio (synthesised, no files) ================= */
 const sfx = (() => {
   let ac = null, master = null, nb = null, on = true;
@@ -2174,7 +2343,10 @@ function cinematic(main, sub, o = {}) {
   }, dur * 0.13 + i * 260);
 }
 /* ---------- gooey blood prompts ---------- */
-const LEVEL_ENTRY = { 2: 'drop', 3: 'slide', 4: 'punch', 5: 'spin', 6: 'stamp', 7: 'shatter', 8: 'curtain', 9: 'quake', 10: 'flood' };
+const LEVEL_ENTRY = { 2: 'drop', 3: 'slide', 4: 'punch', 5: 'spin', 6: 'stamp', 7: 'shatter', 8: 'burst', 9: 'quake', 10: 'flood' };
+// a spree's speed boost lasts exactly as long as the window to chain the next kill
+const SPREE_WINDOW = 3;
+const spreeBoost = () => G.mode === 'play' && G.spree >= SPREE_AT[0] && G.time - G.lastKillT < SPREE_WINDOW;
 const EO2 = 'cubic-bezier(.2,.9,.3,1)';
 function cineBars(dur) {
   if (reduceMotion) return;
@@ -2194,17 +2366,17 @@ function gooEntry(type, root) {
       for (let i = 0; i < 12; i++) k.push({ transform: `translate(${rand(-14, 14)}px,${rand(-10, 10)}px) rotate(${rand(-3, 3)}deg)`, offset: 0.14 + i * 0.03 });
       k.push({ transform: 'none', offset: 0.52 }); return [k, 0.12];
     }
-    case 'curtain': return [[{ transform: 'scale(0)', opacity: 0 }, { transform: 'scale(0)', opacity: 0, offset: 0.16, easing: EO2 }, { transform: 'scale(1.12)', opacity: 1, offset: 0.22 }, { transform: 'none', offset: 0.28 }], 0.2];
+    case 'burst': return [[{ transform: 'scale(0)', opacity: 0 }, { transform: 'scale(0)', opacity: 0, offset: 0.16, easing: EO2 }, { transform: 'scale(1.12)', opacity: 1, offset: 0.22 }, { transform: 'none', offset: 0.28 }], 0.2];
     case 'flood': return [[{ transform: 'translateY(40vh) scale(.6)', opacity: 0 }, { transform: 'translateY(40vh) scale(.6)', opacity: 0, offset: 0.16, easing: EO2 }, { transform: 'translateY(-10px) scale(1.15)', opacity: 1, offset: 0.24 }, { transform: 'none', offset: 0.3 }], 0.22];
     case 'shatter': return [[{ opacity: 1 }, { opacity: 1, offset: 0.2 }], 0.2];
     default: return [[{ transform: 'scale(4)', opacity: 0 }, { transform: 'scale(4)', opacity: 0, offset: 0.06, easing: 'cubic-bezier(.5,0,.9,.6)' }, { transform: 'scale(.88)', opacity: 1, offset: 0.14 }, { transform: 'scale(1.06)', offset: 0.19 }, { transform: 'none', offset: 0.25 }], 0.14];
   }
 }
-// o: { kicker, main, sub, entry, k (gore 1..10), dur, drips, splats, rain, curtain, flood, small }
+// o: { kicker, main, sub, entry, k (gore 1..10), dur, drips, splats, rain, flood, small, art }
 function gooPrompt(o) {
   const dur = o.dur, k = o.k;
   const root = document.createElement('div'); root.className = 'goo' + (o.small ? ' small' : '');
-  root.innerHTML = '<div class="goo-curtain"></div><div class="goo-flood"></div><div class="goo-rain"></div><div class="goo-scene"><div class="goo-kick"></div><div class="goo-stack"><div class="goo-wrap"><div class="goo-splats"></div><div class="goo-main"></div><div class="goo-drips"></div></div><div class="goo-gloss"></div></div><div class="goo-sub"></div></div>';
+  root.innerHTML = '<div class="goo-flood"></div><div class="goo-rain"></div><div class="goo-scene"><div class="goo-art"></div><div class="goo-kick"></div><div class="goo-stack"><div class="goo-wrap"><div class="goo-splats"></div><div class="goo-main"></div><div class="goo-drips"></div></div><div class="goo-gloss"></div></div><div class="goo-sub"></div></div>';
   document.body.insertBefore(root, screens.start);
   setTimeout(() => root.remove(), dur + 80);
   const q = s => root.querySelector(s), kick = q('.goo-kick'), main = q('.goo-main'), gloss = q('.goo-gloss'), subEl = q('.goo-sub'), stack = q('.goo-stack');
@@ -2214,6 +2386,15 @@ function gooPrompt(o) {
   const t = { duration: dur };
   if (reduceMotion) { root.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.85 }, { opacity: 0 }], t); [kick, subEl].forEach(n => n.style.opacity = 1); return; }
   const [frames, slam] = gooEntry(o.entry, root);
+  // fighting-game portrait of the swarm slams in first, then shudders until it melts away
+  const artBox = q('.goo-art');
+  if (o.art) {
+    const cv = document.createElement('canvas'); cv.width = o.art.width; cv.height = o.art.height; cv.getContext('2d').drawImage(o.art, 0, 0); artBox.appendChild(cv);
+    artBox.animate([{ opacity: 0, transform: 'translateX(80vw) skewX(-22deg)', filter: 'brightness(4)' }, { opacity: 0, transform: 'translateX(80vw) skewX(-22deg)', filter: 'brightness(4)', offset: 0.02, easing: EO2 },
+      { opacity: 1, transform: 'translateX(-4vw) skewX(8deg)', filter: 'brightness(3)', offset: 0.09 }, { opacity: 1, transform: 'none', filter: 'brightness(1)', offset: 0.15 },
+      { opacity: 1, transform: 'none', filter: 'brightness(1)', offset: 0.84, easing: 'ease-in' }, { opacity: 0, transform: 'translateY(30px) scale(.92)', filter: 'brightness(1)' }], t);
+    cv.animate([{ transform: 'translate(0,0)' }, { transform: `translate(${o.k >= 8 ? 2 : 1}px,-1px)` }], { duration: 120, iterations: Infinity, direction: 'alternate', easing: 'steps(1)' });
+  } else artBox.remove();
   // every entrance ends by melting down the screen
   stack.animate([...frames, { transform: 'none', opacity: 1, offset: 0.84, easing: 'ease-in' }, { transform: 'translateY(34px) scaleY(1.2)', opacity: 0 }], t);
   if (shatter) {
@@ -2254,12 +2435,6 @@ function gooPrompt(o) {
     e.style.left = rand(0, 100) + '%'; e.style.width = rand(3, 7) + 'px'; e.style.height = h + 'px'; rain.appendChild(e);
     e.animate([{ transform: 'translateY(0)' }, { transform: `translateY(${innerHeight + 120}px)` }], { duration: rand(700, 1300), delay: rand(slam * dur, dur * 0.7), easing: 'ease-in', fill: 'both' });
   }
-  if (o.curtain) {
-    const c = q('.goo-curtain');
-    for (let i = 0; i < 26; i++) { const e = document.createElement('i'), w = rand(14, 40); e.style.left = rand(0, 100) + '%'; e.style.width = w + 'px'; e.style.height = rand(20, 120) + 'px'; c.appendChild(e);
-      e.animate([{ transform: 'scaleY(.2)' }, { transform: 'scaleY(.2)', offset: 0.1 }, { transform: 'scaleY(1)', offset: 0.5 }, { transform: 'scaleY(1.3)' }], t); }
-    c.animate([{ transform: 'translateY(-130%)' }, { transform: 'translateY(0)', offset: 0.16, easing: 'ease-out' }, { transform: 'translateY(0)', offset: 0.7, easing: 'ease-in' }, { transform: 'translateY(-130%)', offset: 0.92 }, { transform: 'translateY(-130%)' }], t);
-  }
   if (o.flood) q('.goo-flood').animate([{ transform: 'translateY(102%)' }, { transform: 'translateY(0)', offset: 0.2, easing: 'ease-out' }, { transform: 'translateY(0)', offset: 0.76, easing: 'ease-in' }, { transform: 'translateY(102%)' }], t);
   // the hit: red wash, shake, a wet boom
   setTimeout(() => {
@@ -2273,14 +2448,14 @@ function levelGoo(L) {
   const dur = L === MAX_LEVEL ? 3800 : 2700;
   cineBars(dur); G.promptBusy = G.time + dur / 1000;
   gooPrompt({ kicker: L === MAX_LEVEL ? 'MAXIMUM MASS' : 'LEVEL UP', main: LEVELS[L - 1].name, sub: 'LEVEL ' + L, entry: LEVEL_ENTRY[L] || 'punch', k: L, dur,
-    drips: 4 + L * 3, splats: 4 + L * 5, rain: L >= 5 ? (L - 4) * 12 : 0, curtain: L >= 8, flood: L === MAX_LEVEL });
+    drips: 4 + L * 3, splats: 4 + L * 5, rain: L >= 5 ? (L - 4) * 12 : 0, flood: L === MAX_LEVEL, art: levelArt(L) });
 }
 /* ---------- kill sprees ---------- */
 const SPREE_AT = [5, 10, 15, 20, 30, 40, 50, 75, 100];
 const SPREE_WORDS = [['BLOODTHIRSTY', 'FEEDING FRENZY', 'CARNAGE', 'NO MERCY'], ['RAMPAGE', 'RIVER OF BLOOD', 'MEAT GRINDER', 'SLAUGHTER'], ['MASSACRE', 'BLOOD STORM', 'UNSTOPPABLE', 'TOTAL CARNAGE']];
 const spreeNeed = i => i < SPREE_AT.length ? SPREE_AT[i] : 100 + (i - SPREE_AT.length + 1) * 25;
 function onKill() {
-  G.spree = G.time - G.lastKillT < 3 ? G.spree + 1 : 1; G.lastKillT = G.time;
+  G.spree = G.time - G.lastKillT < SPREE_WINDOW ? G.spree + 1 : 1; G.lastKillT = G.time;
   if (G.spree === 1) G.spreeIdx = 0;
   if (G.spree < spreeNeed(G.spreeIdx)) return;
   const i = G.spreeIdx++;
